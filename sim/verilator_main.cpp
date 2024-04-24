@@ -24,10 +24,18 @@ typedef int VerilatedTrace_t;
 static void log_cycle(Vvproc_top *top, VerilatedTrace_t *tfp, FILE *fcsv);
 
 int main(int argc, char **argv) {
-    if (argc != 7 && argc != 8) {
-        fprintf(stderr, "Usage: %s PROG_PATHS_LIST MEM_W MEM_SZ MEM_LATENCY EXTRA_CYCLES TRACE_FILE [WAVEFORM_FILE]\n", argv[0]);
+    fprintf(stderr, "Starting Verilator Main()\n");
+    if (argc != 6 && argc != 7 && argc != 8) {
+        fprintf(stderr, "Usage: %s PROG_PATHS_LIST MEM_W MEM_SZ MEM_LATENCY EXTRA_CYCLES [TRACE_FILE] [WAVEFORM_FILE]\n", argv[0]);
         return 1;
     }
+    
+    int csv_out = 0;
+    
+    if(argc > 6){
+        csv_out = 1;
+    }
+    
 
     int mem_w, mem_sz, mem_latency, extra_cycles;
     {
@@ -62,13 +70,17 @@ int main(int argc, char **argv) {
         fprintf(stderr, "ERROR: opening `%s': %s\n", argv[1], strerror(errno));
         return 2;
     }
-
-    FILE *fcsv = fopen(argv[6], "w");
-    if (fcsv == NULL) {
-        fprintf(stderr, "ERROR: opening `%s': %s\n", argv[6], strerror(errno));
-        return 2;
+    
+    FILE *fcsv;
+    if (csv_out == 1) {
+    
+        fcsv = fopen(argv[6], "w");
+        if (fcsv == NULL) {
+            fprintf(stderr, "ERROR: opening `%s': %s\n", argv[6], strerror(errno));
+            return 2;
+        }
+        fprintf(fcsv, "rst_ni;mem_req;mem_addr;pend_vreg_wr_map_o;\n");
     }
-    fprintf(fcsv, "rst_ni;mem_req;mem_addr;pend_vreg_wr_map_o;\n");
 
     unsigned char *mem = (unsigned char *)malloc(mem_sz);
     if (mem == NULL) {
@@ -161,6 +173,7 @@ int main(int argc, char **argv) {
 
         // simulate program execution
         {
+            fprintf(stderr, "Starting Verilator Execution()\n");
             int i;
             for (i = 0; i < mem_latency; i++) {
                 mem_rvalid_queue[i] = 0;
@@ -173,15 +186,20 @@ int main(int argc, char **argv) {
                 top->eval();
                 top->clk_i = 0;
                 top->eval();
-                log_cycle(top, tfp, fcsv);
+                if (csv_out == 1) {
+                    log_cycle(top, tfp, fcsv);
+                }
             }
             top->rst_ni = 1;
             top->eval();
 
             int end_cnt    = 0, // count number of cycles after address 0 was requested
                 abort_cnt  = 0; // count number of cycles since mem_req_o last toggled
+                
+            int cycles = 0;
+            
             while (end_cnt < extra_cycles) {
-
+                //fprintf(stderr, "Cycle Simulated()\n");
                 // if ABORT_CYCLES is defined, then it specifies the number of cycles after which
                 // simulation is aborted in case there is no activity on the memory interface
 #ifdef ABORT_CYCLES
@@ -248,15 +266,22 @@ int main(int argc, char **argv) {
                 // falling clock edge
                 top->clk_i = 0;
                 top->eval();
+                
+                cycles++;
 
+                if (csv_out == 1) {
                 // log data
-                log_cycle(top, tfp, fcsv);
+                    log_cycle(top, tfp, fcsv);
+                }
 
                 if (end_cnt > 0 || (top->mem_req_o == 1 && top->mem_addr_o == 0)) {
                     end_cnt++;
                 }
                 abort_cnt = (top->mem_req_o == mem_req_o_tmp) ? abort_cnt + 1 : 0;
             }
+            
+            fprintf(stderr, "Total Cycles: `%d'\n", cycles - extra_cycles);
+            
         }
 
         // write dump file
@@ -287,7 +312,9 @@ int main(int argc, char **argv) {
     free(mem_rvalid_queue);
     free(mem_rdata_queue);
     free(mem_err_queue);
-    fclose(fcsv);
+    if (csv_out == 1) {
+        fclose(fcsv);
+    }
     fclose(fprogs);
     return 0;
 }
