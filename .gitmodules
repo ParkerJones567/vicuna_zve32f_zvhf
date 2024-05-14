@@ -7,4 +7,4 @@
 	url = https://github.com/openhwgroup/cv32e40x.git
 [submodule "fpu_ss"]
 	path = fpu_ss
-	url = https://github.com/pulp-platform/fpu_ss.git
+	url = https://github.com/ParkerJones567/fpu_ss.git
