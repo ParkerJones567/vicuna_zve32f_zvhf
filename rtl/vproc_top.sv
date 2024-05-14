@@ -67,9 +67,13 @@ module vproc_top import vproc_pkg::*; #(
     logic        sdata_err;
     logic [31:0] sdata_rdata;
 
+   
+
+    ///////////////////////////Top level xif interface, some signals used for the memory units
+
     // Vector Unit Interface
-    localparam X_NUM_RS = 2;
-    localparam X_ID_WIDTH = 3;
+    localparam X_NUM_RS = 3;
+    localparam X_ID_WIDTH = 4;
     localparam X_RFR_WIDTH = 32;
     localparam X_RFW_WIDTH = 32;
     localparam X_MISA = 0;
@@ -99,6 +103,10 @@ module vproc_top import vproc_pkg::*; #(
         12'hC21, // vtype
         12'hC22  // vlenb
     };
+
+
+
+    ///////////////////////// END DEDICATED SECTION FOR VPROC
 
 `ifdef MAIN_CORE_IBEX
     localparam bit USE_XIF_MEM = '0;
@@ -226,17 +234,25 @@ module vproc_top import vproc_pkg::*; #(
 `ifdef MAIN_CORE_CV32E40X
     localparam bit USE_XIF_MEM = VMEM_W == 32;
 
+    
+    `ifdef XIF_ON
+    localparam bit X_EXT = 1'b1;
+    `else
+    localparam bit X_EXT = 1'b0;
+    `endif
+
     // eXtension Interface
     if_xif #(
-        .X_NUM_RS    ( 2  ),
+        .X_NUM_RS    ( 3  ),
         .X_MEM_WIDTH ( 32 ),
         .X_RFR_WIDTH ( 32 ),
         .X_RFW_WIDTH ( 32 ),
-        .X_MISA      ( '0 )
+        .X_MISA      ( 32'b00000000000000000000000000100000 )
     ) host_xif();
 
     cv32e40x_core #(
-        .X_EXT               ( 1'b1          )
+        .X_EXT               ( X_EXT         ),
+        .X_NUM_RS            ( 3             )
     ) core (
         .clk_i               ( clk_i         ),
         .rst_ni              ( rst_ni        ),
@@ -293,6 +309,10 @@ module vproc_top import vproc_pkg::*; #(
         .core_sleep_o        (               )
     );
 
+
+
+    //CONNECTING VPROC_XIF to HOST_XIF.  MY WRAPPER WILL END UP GOING HERE
+
     assign vcore_xif.issue_valid         = host_xif.issue_valid;
     assign host_xif.issue_ready          = vcore_xif.issue_ready;
     assign vcore_xif.issue_req.instr     = host_xif.issue_req.instr;
@@ -348,12 +368,13 @@ module vproc_top import vproc_pkg::*; #(
     assign vect_csr_we    = '{default:'0};
     assign vect_csr_wdata = '{default:'0};
 
+    //END SECTION FOR VPROC INTEGRATION
+
 `else
     localparam bit USE_XIF_MEM = '0;
     $fatal(1, "One of the MAIN_CORE_* macros must be defined to select a main core.");
 `endif
 `endif
-
 
     ///////////////////////////////////////////////////////////////////////////
     // VECTOR CORE INTEGRATION
@@ -385,7 +406,9 @@ module vproc_top import vproc_pkg::*; #(
     assign csr_vxrm_wr       = vect_csr_we[2] ? vect_csr_wdata[2][1:0] : vect_csr_wdata[3][2:1];
     assign csr_vxrm_wren     = vect_csr_we[2] | vect_csr_we[3];
 
+
     // Data read/write for Vector Unit
+    // THESE SIGNALS MIGHT STILL BE NEEDED FOR THE ARBITER FOR THE FPU
     logic                vdata_gnt;
     logic                vdata_rvalid;
     logic                vdata_err;
@@ -402,7 +425,7 @@ module vproc_top import vproc_pkg::*; #(
 
     localparam bit [BUF_FLAGS_W -1:0] BUF_FLAGS  = (BUF_FLAGS_W'(1) << BUF_DEQUEUE  ) |
                                                    (BUF_FLAGS_W'(1) << BUF_VREG_PEND);
-
+`ifdef VICUNA_ON
     vproc_core #(
         .XIF_ID_W           ( X_ID_WIDTH         ),
         .XIF_MEM_W          ( VMEM_W             ),
@@ -440,6 +463,63 @@ module vproc_top import vproc_pkg::*; #(
 
         .pend_vreg_wr_map_o ( pend_vreg_wr_map_o )
     );
+`endif
+
+`ifdef SCALAR_FPU_ON
+
+fpu_ss #(
+.PULP_ZFINX           ( 0 ),
+.INPUT_BUFFER_DEPTH   ( 1 ), //might need to make this 3, as this is the max number of fp instructions that can be in the pipeline
+.OUT_OF_ORDER         ( 0 ),
+.FORWARDING           ( 0 ),
+.FPU_FEATURES         ( fpu_ss_pkg::FPU_FEATURES),
+.FPU_IMPLEMENTATION   ( fpu_ss_pkg::FPU_IMPLEMENTATION )
+) fpu_ss_i (
+    // clock and reset
+    .clk_i                (clk_i),
+    .rst_ni               (sync_rst_n),
+
+    // Compressed Interface (Not currently used)
+    .x_compressed_valid_i (),
+    .x_compressed_ready_o (),
+    .x_compressed_req_i   (),
+    .x_compressed_resp_o  (),
+
+    // Issue Interface
+    .x_issue_valid_i      ( host_xif.issue_valid ),
+    .x_issue_ready_o      ( host_xif.issue_ready ),
+    .x_issue_req_i        ( host_xif.issue_req ),
+    .x_issue_resp_o       ( host_xif.issue_resp ),
+
+    // Commit Interface
+    .x_commit_valid_i     ( host_xif.commit_valid ),
+    .x_commit_i           ( host_xif.commit ),
+
+    // Memory Request/Response Interface
+    .x_mem_valid_o        ( host_xif.mem_valid ),
+    .x_mem_ready_i        ( host_xif.mem_ready ),
+    .x_mem_req_o          ( host_xif.mem_req ),
+    .x_mem_resp_i         ( host_xif.mem_resp ),
+
+    // Memory Result Interface
+    .x_mem_result_valid_i ( host_xif.mem_result_valid ),
+    .x_mem_result_i       ( host_xif.mem_result ),
+
+    // Result Interface
+    .x_result_valid_o     ( host_xif.result_valid ),
+    .x_result_ready_i     ( host_xif.result_ready ),
+    .x_result_o           ( host_xif.result )
+);
+
+`endif
+
+
+
+
+
+
+
+
 
     // Extract vector unit memory signals from extension interface
     if (USE_XIF_MEM) begin

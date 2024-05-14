@@ -5,3 +5,6 @@
 [submodule "cv32e40x"]
 	path = cv32e40x
 	url = https://github.com/openhwgroup/cv32e40x.git
+[submodule "fpu_ss"]
+	path = fpu_ss
+	url = https://github.com/pulp-platform/fpu_ss.git
