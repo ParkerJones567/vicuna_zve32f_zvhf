@@ -4,7 +4,8 @@
 	branch = coproc_if_external_csr
 [submodule "cv32e40x"]
 	path = cv32e40x
-	url = https://github.com/openhwgroup/cv32e40x.git
+	url = https://github.com/ParkerJones567/cv32e40x_f_zhf.git
+	branch = f_zhf_fixes
 [submodule "fpu_ss"]
 	path = fpu_ss
 	url = https://github.com/ParkerJones567/fpu_ss.git
