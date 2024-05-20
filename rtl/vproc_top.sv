@@ -310,60 +310,60 @@ module vproc_top import vproc_pkg::*; #(
     );
 
 
+    `ifndef SCALAR_FPU_ON
+    //CONNECTING VPROC_XIF to HOST_XIF.
+    assign vcore_xif.issue_valid         = host_xif.issue_valid;           
+    assign host_xif.issue_ready          = vcore_xif.issue_ready;          
+    assign vcore_xif.issue_req.instr     = host_xif.issue_req.instr;        
+    assign vcore_xif.issue_req.mode      = host_xif.issue_req.mode;         
+    assign vcore_xif.issue_req.id        = host_xif.issue_req.id;           
+    assign vcore_xif.issue_req.rs        = host_xif.issue_req.rs;           
+    assign vcore_xif.issue_req.rs_valid  = host_xif.issue_req.rs_valid;     
+    assign host_xif.issue_resp.accept    = vcore_xif.issue_resp.accept;     
+    assign host_xif.issue_resp.writeback = vcore_xif.issue_resp.writeback;  
+    assign host_xif.issue_resp.dualwrite = vcore_xif.issue_resp.dualwrite;  
+    assign host_xif.issue_resp.dualread  = vcore_xif.issue_resp.dualread;   
+    assign host_xif.issue_resp.loadstore = vcore_xif.issue_resp.loadstore;  
+    assign host_xif.issue_resp.exc       = vcore_xif.issue_resp.exc;        
 
-    //CONNECTING VPROC_XIF to HOST_XIF.  MY WRAPPER WILL END UP GOING HERE
-
-    assign vcore_xif.issue_valid         = host_xif.issue_valid;
-    assign host_xif.issue_ready          = vcore_xif.issue_ready;
-    assign vcore_xif.issue_req.instr     = host_xif.issue_req.instr;
-    assign vcore_xif.issue_req.mode      = host_xif.issue_req.mode;
-    assign vcore_xif.issue_req.id        = host_xif.issue_req.id;
-    assign vcore_xif.issue_req.rs        = host_xif.issue_req.rs;
-    assign vcore_xif.issue_req.rs_valid  = host_xif.issue_req.rs_valid;
-    assign host_xif.issue_resp.accept    = vcore_xif.issue_resp.accept;
-    assign host_xif.issue_resp.writeback = vcore_xif.issue_resp.writeback;
-    assign host_xif.issue_resp.dualwrite = vcore_xif.issue_resp.dualwrite;
-    assign host_xif.issue_resp.dualread  = vcore_xif.issue_resp.dualread;
-    assign host_xif.issue_resp.loadstore = vcore_xif.issue_resp.loadstore;
-    assign host_xif.issue_resp.exc       = vcore_xif.issue_resp.exc;
-
-    assign vcore_xif.commit_valid       = host_xif.commit_valid;
-    assign vcore_xif.commit.id          = host_xif.commit.id;
-    assign vcore_xif.commit.commit_kill = host_xif.commit.commit_kill;
+    assign vcore_xif.commit_valid       = host_xif.commit_valid;            
+    assign vcore_xif.commit.id          = host_xif.commit.id;               
+    assign vcore_xif.commit.commit_kill = host_xif.commit.commit_kill;      
 
     assign host_xif.result_valid   = vcore_xif.result_valid;
-    assign vcore_xif.result_ready  = host_xif.result_ready;
-    assign host_xif.result.id      = vcore_xif.result.id;
-    assign host_xif.result.data    = vcore_xif.result.data;
-    assign host_xif.result.rd      = vcore_xif.result.rd;
-    assign host_xif.result.we      = vcore_xif.result.we;
-    assign host_xif.result.exc     = vcore_xif.result.exc;
-    assign host_xif.result.exccode = vcore_xif.result.exccode;
-    assign host_xif.result.err     = vcore_xif.result.err;
-    assign host_xif.result.dbg     = vcore_xif.result.dbg;
+    assign vcore_xif.result_ready  = host_xif.result_ready;                 
+    assign host_xif.result.id      = vcore_xif.result.id;                   
+    assign host_xif.result.data    = vcore_xif.result.data;                    
+    assign host_xif.result.rd      = vcore_xif.result.rd;                   
+    assign host_xif.result.we      = vcore_xif.result.we;                   
+    assign host_xif.result.exc     = vcore_xif.result.exc;                  
+    assign host_xif.result.exccode = vcore_xif.result.exccode;              
+    assign host_xif.result.err     = vcore_xif.result.err;                  
+    assign host_xif.result.dbg     = vcore_xif.result.dbg;                  
 
     if (USE_XIF_MEM) begin
         assign host_xif.mem_valid         = vcore_xif.mem_valid;
-        assign vcore_xif.mem_ready        = host_xif.mem_ready;
-        assign host_xif.mem_req.id        = vcore_xif.mem_req.id;
-        assign host_xif.mem_req.addr      = vcore_xif.mem_req.addr;
-        assign host_xif.mem_req.mode      = vcore_xif.mem_req.mode;
-        assign host_xif.mem_req.we        = vcore_xif.mem_req.we;
-        assign host_xif.mem_req.size      = vcore_xif.mem_req.size;
-        assign host_xif.mem_req.be        = vcore_xif.mem_req.be;
-        assign host_xif.mem_req.attr      = vcore_xif.mem_req.attr;
-        assign host_xif.mem_req.wdata     = vcore_xif.mem_req.wdata;
-        assign host_xif.mem_req.last      = vcore_xif.mem_req.last;
-        assign host_xif.mem_req.spec      = vcore_xif.mem_req.spec;
-        assign vcore_xif.mem_resp.exc     = host_xif.mem_resp.exc;
-        assign vcore_xif.mem_resp.exccode = host_xif.mem_resp.exccode;
-        assign vcore_xif.mem_resp.dbg     = host_xif.mem_resp.dbg;
-        assign vcore_xif.mem_result_valid = host_xif.mem_result_valid;
-        assign vcore_xif.mem_result.id    = host_xif.mem_result.id;
-        assign vcore_xif.mem_result.rdata = host_xif.mem_result.rdata;
-        assign vcore_xif.mem_result.err   = host_xif.mem_result.err;
-        assign vcore_xif.mem_result.dbg   = host_xif.mem_result.dbg;
+        assign vcore_xif.mem_ready        = host_xif.mem_ready;             
+        assign host_xif.mem_req.id        = vcore_xif.mem_req.id;           
+        assign host_xif.mem_req.addr      = vcore_xif.mem_req.addr;         
+        assign host_xif.mem_req.mode      = vcore_xif.mem_req.mode;         
+        assign host_xif.mem_req.we        = vcore_xif.mem_req.we;           
+        assign host_xif.mem_req.size      = vcore_xif.mem_req.size;         
+        assign host_xif.mem_req.be        = vcore_xif.mem_req.be;           
+        assign host_xif.mem_req.attr      = vcore_xif.mem_req.attr;         
+        assign host_xif.mem_req.wdata     = vcore_xif.mem_req.wdata;        
+        assign host_xif.mem_req.last      = vcore_xif.mem_req.last;         
+        assign host_xif.mem_req.spec      = vcore_xif.mem_req.spec;         
+        assign vcore_xif.mem_resp.exc     = host_xif.mem_resp.exc;          
+        assign vcore_xif.mem_resp.exccode = host_xif.mem_resp.exccode;      
+        assign vcore_xif.mem_resp.dbg     = host_xif.mem_resp.dbg;          
+        assign vcore_xif.mem_result_valid = host_xif.mem_result_valid;      
+        assign vcore_xif.mem_result.id    = host_xif.mem_result.id;         
+        assign vcore_xif.mem_result.rdata = host_xif.mem_result.rdata;      
+        assign vcore_xif.mem_result.err   = host_xif.mem_result.err;        
+        assign vcore_xif.mem_result.dbg   = host_xif.mem_result.dbg;        
     end
+    `endif
 
     assign vect_csr_we    = '{default:'0};
     assign vect_csr_wdata = '{default:'0};
@@ -408,7 +408,6 @@ module vproc_top import vproc_pkg::*; #(
 
 
     // Data read/write for Vector Unit
-    // THESE SIGNALS MIGHT STILL BE NEEDED FOR THE ARBITER FOR THE FPU
     logic                vdata_gnt;
     logic                vdata_rvalid;
     logic                vdata_err;
@@ -467,59 +466,237 @@ module vproc_top import vproc_pkg::*; #(
 
 `ifdef SCALAR_FPU_ON
 
-fpu_ss #(
-.PULP_ZFINX           ( 0 ),
-.INPUT_BUFFER_DEPTH   ( 1 ), //might need to make this 3, as this is the max number of fp instructions that can be in the pipeline
-.OUT_OF_ORDER         ( 0 ),
-.FORWARDING           ( 0 ),
-.FPU_FEATURES         ( fpu_ss_pkg::FPU_FEATURES),
-.FPU_IMPLEMENTATION   ( fpu_ss_pkg::FPU_IMPLEMENTATION )
-) fpu_ss_i (
-    // clock and reset
-    .clk_i                (clk_i),
-    .rst_ni               (sync_rst_n),
+     if_xif #(
+        .X_NUM_RS    ( 3  ),
+        .X_MEM_WIDTH ( 32 ),
+        .X_RFR_WIDTH ( 32 ),
+        .X_RFW_WIDTH ( 32 ),
+        .X_MISA      ( 32'b00000000000000000000000000100000 )
+    ) fpu_ss_xif();
 
-    // Compressed Interface (Not currently used)
-    .x_compressed_valid_i (),
-    .x_compressed_ready_o (),
-    .x_compressed_req_i   (),
-    .x_compressed_resp_o  (),
+    fpu_ss #(
+    .PULP_ZFINX           ( 0 ),
+    .INPUT_BUFFER_DEPTH   ( 1 ), //might need to make this 3, as this is the max number of fp instructions that can be in the pipeline
+    .OUT_OF_ORDER         ( 0 ),
+    .FORWARDING           ( 0 ),
+    .FPU_FEATURES         ( fpu_ss_pkg::FPU_FEATURES),
+    .FPU_IMPLEMENTATION   ( fpu_ss_pkg::FPU_IMPLEMENTATION )
+    ) fpu_ss_i (
+        // clock and reset
+        .clk_i                (clk_i),
+        .rst_ni               (sync_rst_n),
 
-    // Issue Interface
-    .x_issue_valid_i      ( host_xif.issue_valid ),
-    .x_issue_ready_o      ( host_xif.issue_ready ),
-    .x_issue_req_i        ( host_xif.issue_req ),
-    .x_issue_resp_o       ( host_xif.issue_resp ),
+        // Compressed Interface (Not currently used)
+        .x_compressed_valid_i (),
+        .x_compressed_ready_o (),
+        .x_compressed_req_i   (),
+        .x_compressed_resp_o  (),
 
-    // Commit Interface
-    .x_commit_valid_i     ( host_xif.commit_valid ),
-    .x_commit_i           ( host_xif.commit ),
+        // Issue Interface
+        .x_issue_valid_i      ( fpu_ss_xif.issue_valid ),
+        .x_issue_ready_o      ( fpu_ss_xif.issue_ready ),
+        .x_issue_req_i        ( fpu_ss_xif.issue_req ),
+        .x_issue_resp_o       ( fpu_ss_xif.issue_resp ),
 
-    // Memory Request/Response Interface
-    .x_mem_valid_o        ( host_xif.mem_valid ),
-    .x_mem_ready_i        ( host_xif.mem_ready ),
-    .x_mem_req_o          ( host_xif.mem_req ),
-    .x_mem_resp_i         ( host_xif.mem_resp ),
+        // Commit Interface
+        .x_commit_valid_i     ( fpu_ss_xif.commit_valid ),
+        .x_commit_i           ( fpu_ss_xif.commit ),
 
-    // Memory Result Interface
-    .x_mem_result_valid_i ( host_xif.mem_result_valid ),
-    .x_mem_result_i       ( host_xif.mem_result ),
+        // Memory Request/Response Interface
+        .x_mem_valid_o        ( fpu_ss_xif.mem_valid ),
+        .x_mem_ready_i        ( fpu_ss_xif.mem_ready ),
+        .x_mem_req_o          ( fpu_ss_xif.mem_req ),
+        .x_mem_resp_i         ( fpu_ss_xif.mem_resp ),
 
-    // Result Interface
-    .x_result_valid_o     ( host_xif.result_valid ),
-    .x_result_ready_i     ( host_xif.result_ready ),
-    .x_result_o           ( host_xif.result )
-);
+        // Memory Result Interface
+        .x_mem_result_valid_i ( fpu_ss_xif.mem_result_valid ),
+        .x_mem_result_i       ( fpu_ss_xif.mem_result ),
+
+        // Result Interface
+        .x_result_valid_o     ( fpu_ss_xif.result_valid ),
+        .x_result_ready_i     ( fpu_ss_xif.result_ready ),
+        .x_result_o           ( fpu_ss_xif.result )
+    );
+
+    //CONNECTING FPU_SS to HOST_XIF.
+    `ifndef VICUNA_ON
+
+    assign fpu_ss_xif.issue_valid        = host_xif.issue_valid;            
+    assign host_xif.issue_ready          = fpu_ss_xif.issue_ready;          
+    assign fpu_ss_xif.issue_req.instr    = host_xif.issue_req.instr;        
+    assign fpu_ss_xif.issue_req.mode     = host_xif.issue_req.mode;         
+    assign fpu_ss_xif.issue_req.id       = host_xif.issue_req.id;           
+    assign fpu_ss_xif.issue_req.rs       = host_xif.issue_req.rs;           
+    assign fpu_ss_xif.issue_req.rs_valid = host_xif.issue_req.rs_valid;     
+    assign host_xif.issue_resp.accept    = fpu_ss_xif.issue_resp.accept;        
+    assign host_xif.issue_resp.writeback = fpu_ss_xif.issue_resp.writeback;     
+    assign host_xif.issue_resp.dualwrite = fpu_ss_xif.issue_resp.dualwrite;     
+    assign host_xif.issue_resp.dualread  = fpu_ss_xif.issue_resp.dualread;      
+    assign host_xif.issue_resp.loadstore = fpu_ss_xif.issue_resp.loadstore;      
+    assign host_xif.issue_resp.exc       = fpu_ss_xif.issue_resp.exc;       
+
+    assign fpu_ss_xif.commit_valid       = host_xif.commit_valid;           
+    assign fpu_ss_xif.commit.id          = host_xif.commit.id;              
+    assign fpu_ss_xif.commit.commit_kill = host_xif.commit.commit_kill;     
+
+    assign host_xif.result_valid   = fpu_ss_xif.result_valid;
+    assign fpu_ss_xif.result_ready = host_xif.result_ready;                 
+    assign host_xif.result.id      = fpu_ss_xif.result.id;                  
+    assign host_xif.result.data    = fpu_ss_xif.result.data;                  
+    assign host_xif.result.rd      = fpu_ss_xif.result.rd;                  
+    assign host_xif.result.we      = fpu_ss_xif.result.we;                  
+    assign host_xif.result.exc     = fpu_ss_xif.result.exc;                 
+    assign host_xif.result.exccode = fpu_ss_xif.result.exccode;             
+    assign host_xif.result.err     = fpu_ss_xif.result.err;                 
+    assign host_xif.result.dbg     = fpu_ss_xif.result.dbg;                 
+
+    if (USE_XIF_MEM) begin
+        assign host_xif.mem_valid          = fpu_ss_xif.mem_valid;
+        assign fpu_ss_xif.mem_ready        = host_xif.mem_ready;             
+        assign host_xif.mem_req.id         = fpu_ss_xif.mem_req.id;          
+        assign host_xif.mem_req.addr       = fpu_ss_xif.mem_req.addr;        
+        assign host_xif.mem_req.mode       = fpu_ss_xif.mem_req.mode;        
+        assign host_xif.mem_req.we         = fpu_ss_xif.mem_req.we;          
+        assign host_xif.mem_req.size       = fpu_ss_xif.mem_req.size;        
+        assign host_xif.mem_req.be         = fpu_ss_xif.mem_req.be;          
+        assign host_xif.mem_req.attr       = fpu_ss_xif.mem_req.attr;        
+        assign host_xif.mem_req.wdata      = fpu_ss_xif.mem_req.wdata;       
+        assign host_xif.mem_req.last       = fpu_ss_xif.mem_req.last;        
+        assign host_xif.mem_req.spec       = fpu_ss_xif.mem_req.spec;        
+        assign fpu_ss_xif.mem_resp.exc     = host_xif.mem_resp.exc;          
+        assign fpu_ss_xif.mem_resp.exccode = host_xif.mem_resp.exccode;      
+        assign fpu_ss_xif.mem_resp.dbg     = host_xif.mem_resp.dbg;          
+        assign fpu_ss_xif.mem_result_valid = host_xif.mem_result_valid;      
+        assign fpu_ss_xif.mem_result.id    = host_xif.mem_result.id;         
+        assign fpu_ss_xif.mem_result.rdata = host_xif.mem_result.rdata;      
+        assign fpu_ss_xif.mem_result.err   = host_xif.mem_result.err;        
+        assign fpu_ss_xif.mem_result.dbg   = host_xif.mem_result.dbg;        
+    end
+    `endif
 
 `endif
 
 
+//If both Vicuna and FPU_SS are used, connect with arbitration
+//All signals from the host can be broadcast to all units on the interface
+`ifdef VICUNA_ON
+    `ifdef SCALAR_FPU_ON
+
+    assign fpu_ss_xif.issue_valid        = host_xif.issue_valid & host_xif.issue_ready;            //Valid signal only high when host signal is valid and both units are ready.
+    assign vcore_xif.issue_valid         = host_xif.issue_valid & host_xif.issue_ready;            //Prevents vector unit from accepting offload when core is stalled by FPU
+    assign host_xif.issue_ready          = fpu_ss_xif.issue_ready & vcore_xif.issue_ready ;               // Arbitrate: only ready when both units are ready to accept
+    assign fpu_ss_xif.issue_req.instr    = host_xif.issue_req.instr;        //Broadcast from host
+    assign vcore_xif.issue_req.instr    = host_xif.issue_req.instr;        //Broadcast from host
+    assign fpu_ss_xif.issue_req.mode     = host_xif.issue_req.mode;         //Broadcast from host
+    assign vcore_xif.issue_req.mode     = host_xif.issue_req.mode;         //Broadcast from host
+    assign fpu_ss_xif.issue_req.id       = host_xif.issue_req.id;           //Broadcast from host
+    assign vcore_xif.issue_req.id       = host_xif.issue_req.id;           //Broadcast from host
+    assign fpu_ss_xif.issue_req.rs       = host_xif.issue_req.rs;           //Broadcast from host
+    assign vcore_xif.issue_req.rs       = host_xif.issue_req.rs;           //Broadcast from host
+    assign fpu_ss_xif.issue_req.rs_valid = host_xif.issue_req.rs_valid;     //Broadcast from host
+    assign vcore_xif.issue_req.rs_valid = host_xif.issue_req.rs_valid;     //Broadcast from host
+    assign host_xif.issue_resp.accept    = fpu_ss_xif.issue_resp.accept | vcore_xif.issue_resp.accept;         // Arbitrate: each unit outputs 0 if not responding.  correct output is OR of both  
+    assign host_xif.issue_resp.writeback = fpu_ss_xif.issue_resp.writeback | vcore_xif.issue_resp.writeback;      
+    assign host_xif.issue_resp.dualwrite = fpu_ss_xif.issue_resp.dualwrite | vcore_xif.issue_resp.dualwrite;      
+    assign host_xif.issue_resp.dualread  = fpu_ss_xif.issue_resp.dualread | vcore_xif.issue_resp.dualread;       
+    assign host_xif.issue_resp.loadstore = fpu_ss_xif.issue_resp.loadstore | vcore_xif.issue_resp.loadstore;      
+    assign host_xif.issue_resp.exc       = fpu_ss_xif.issue_resp.exc | vcore_xif.issue_resp.exc;            
+
+    assign fpu_ss_xif.commit_valid       = host_xif.commit_valid;            //Broadcast from host
+    assign vcore_xif.commit_valid       = host_xif.commit_valid;            //Broadcast from host
+    assign fpu_ss_xif.commit.id          = host_xif.commit.id;               //Broadcast from host
+    assign vcore_xif.commit.id          = host_xif.commit.id;               //Broadcast from host
+    assign fpu_ss_xif.commit.commit_kill = host_xif.commit.commit_kill;      //Broadcast from host
+    assign vcore_xif.commit.commit_kill = host_xif.commit.commit_kill;      //Broadcast from host  
 
 
+    assign host_xif.result_valid   = fpu_ss_xif.result_valid | vcore_xif.result_valid;                    // Arbitrate: Valid when either unit has valid data.  Core will be waiting for one result at a time
+    assign fpu_ss_xif.result_ready = host_xif.result_ready;                 //Broadcast from host
+    assign vcore_xif.result_ready = host_xif.result_ready;                 //Broadcast from host
+    assign host_xif.result.id      = fpu_ss_xif.result.id | vcore_xif.result.id;                       // Arbitrate: each unit outputs 0 if not responding.  correct output is OR of both 
+    assign host_xif.result.data    = fpu_ss_xif.result.data | vcore_xif.result.data;                       
+    assign host_xif.result.rd      = fpu_ss_xif.result.rd | vcore_xif.result.rd;                       
+    assign host_xif.result.we      = fpu_ss_xif.result.we | vcore_xif.result.we;                       
+    assign host_xif.result.exc     = fpu_ss_xif.result.exc | vcore_xif.result.exc;                      
+    assign host_xif.result.exccode = fpu_ss_xif.result.exccode | vcore_xif.result.exccode;                  
+    assign host_xif.result.err     = fpu_ss_xif.result.err | vcore_xif.result.err;                    
+    assign host_xif.result.dbg     = fpu_ss_xif.result.dbg | fpu_ss_xif.result.dbg;   
 
+    if (USE_XIF_MEM) begin
+        assign host_xif.mem_valid          = fpu_ss_xif.mem_valid | vcore_xif.mem_valid;                // Arbitrate: 1 if issuing req, 0 otherwise. output is OR
+        assign fpu_ss_xif.mem_ready        = host_xif.mem_ready;             //Broadcast from host
+        assign vcore_xif.mem_ready        = host_xif.mem_ready;             //Broadcast from host
+        always_comb begin
+            if (fpu_ss_xif.mem_valid) begin
+                host_xif.mem_req.id         = fpu_ss_xif.mem_req.id;               // Arbitrate : value only valid when mem_valid is high.  Correct output is (mem_valid & mem_req) | (mem_valid & mem_req)
+                host_xif.mem_req.addr       = fpu_ss_xif.mem_req.addr;             
+                host_xif.mem_req.mode       = fpu_ss_xif.mem_req.mode;             
+                host_xif.mem_req.we         = fpu_ss_xif.mem_req.we;               
+                host_xif.mem_req.size       = fpu_ss_xif.mem_req.size;             
+                host_xif.mem_req.be         = fpu_ss_xif.mem_req.be;               
+                host_xif.mem_req.attr       = fpu_ss_xif.mem_req.attr;             
+                host_xif.mem_req.wdata      = fpu_ss_xif.mem_req.wdata;            
+                host_xif.mem_req.last       = fpu_ss_xif.mem_req.last;             
+                host_xif.mem_req.spec       = fpu_ss_xif.mem_req.spec;   
+            end else begin
+                host_xif.mem_req.id         = vcore_xif.mem_req.id;               // Arbitrate : value only valid when mem_valid is high.  Correct output is (mem_valid & mem_req) | (mem_valid & mem_req)
+                host_xif.mem_req.addr       = vcore_xif.mem_req.addr;             
+                host_xif.mem_req.mode       = vcore_xif.mem_req.mode;             
+                host_xif.mem_req.we         = vcore_xif.mem_req.we;               
+                host_xif.mem_req.size       = vcore_xif.mem_req.size;             
+                host_xif.mem_req.be         = vcore_xif.mem_req.be;               
+                host_xif.mem_req.attr       = vcore_xif.mem_req.attr;             
+                host_xif.mem_req.wdata      = vcore_xif.mem_req.wdata;            
+                host_xif.mem_req.last       = vcore_xif.mem_req.last;             
+                host_xif.mem_req.spec       = vcore_xif.mem_req.spec; 
+            end          
 
+        end
 
+        //For arbitration of mem_result_valid, keep track of which offloaded instruction IDs are sent to which unit on the Xif interface.  Unintended behaviour from FPU_SS when this signal is broadcast
+        logic [X_ID_WIDTH-1:0] mem_req_d;
+        logic [X_ID_WIDTH-1:0] mem_req_q;
 
+        always_comb begin
+            mem_req_d = mem_req_q;
+            if (vcore_xif.issue_resp.accept) begin          //if sent to vicuna, set to 0
+                mem_req_d[host_xif.issue_req.id] = 1'b0;
+            end
+            if (fpu_ss_xif.issue_resp.accept) begin         //if sent to fpu_ss, set to 1
+                mem_req_d[host_xif.issue_req.id] = 1'b1;
+            end
+        end
+
+        always_ff @(posedge clk_i, negedge rst_ni) begin
+            if (~rst_ni) begin
+                mem_req_q   <= '0;
+            end else begin
+                mem_req_q   <= mem_req_d;
+            end
+        end
+
+        always_comb begin
+            if (mem_req_q[host_xif.mem_result.id]) begin //Mem_result is for FPU_SS
+                fpu_ss_xif.mem_result_valid = host_xif.mem_result_valid;
+                vcore_xif.mem_result_valid    = 1'b0;
+            end else begin                              //Mem_result is for Vicuna
+                fpu_ss_xif.mem_result_valid = 1'b0;
+                vcore_xif.mem_result_valid    = host_xif.mem_result_valid;
+            end
+        end
+        assign fpu_ss_xif.mem_result.id    = host_xif.mem_result.id;         //Broadcast from host
+        assign vcore_xif.mem_result.id    = host_xif.mem_result.id;         //Broadcast from host
+        assign fpu_ss_xif.mem_result.rdata = host_xif.mem_result.rdata;      //Broadcast from host
+        assign vcore_xif.mem_result.rdata = host_xif.mem_result.rdata;      //Broadcast from host
+        assign fpu_ss_xif.mem_result.err   = host_xif.mem_result.err;        //Broadcast from host
+        assign vcore_xif.mem_result.err   = host_xif.mem_result.err;        //Broadcast from host
+        assign fpu_ss_xif.mem_result.dbg   = host_xif.mem_result.dbg;        //Broadcast from host
+        assign vcore_xif.mem_result.dbg   = host_xif.mem_result.dbg;        //Broadcast from host
+
+    end
+
+    `endif
+`endif
 
     // Extract vector unit memory signals from extension interface
     if (USE_XIF_MEM) begin
