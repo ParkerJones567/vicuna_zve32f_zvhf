@@ -25,6 +25,9 @@ static void log_cycle(Vvproc_top *top, VerilatedTrace_t *tfp, FILE *fcsv);
 
 int main(int argc, char **argv) {
     fprintf(stderr, "Starting Verilator Main()\n");
+    
+    int exit_code = 0;
+    
     if (argc != 6 && argc != 7 && argc != 8) {
         fprintf(stderr, "Usage: %s PROG_PATHS_LIST MEM_W MEM_SZ MEM_LATENCY EXTRA_CYCLES [TRACE_FILE] [WAVEFORM_FILE]\n", argv[0]);
         return 1;
@@ -206,6 +209,7 @@ int main(int argc, char **argv) {
                 if (abort_cnt >= ABORT_CYCLES) {
                     fprintf(stderr, "WARNING: memory interface inactive for %d cycles, "
                                     "aborting simulation\n", ABORT_CYCLES);
+                    exit_code = 1;
                     break;
                 }
 #endif
@@ -316,7 +320,7 @@ int main(int argc, char **argv) {
         fclose(fcsv);
     }
     fclose(fprogs);
-    return 0;
+    return exit_code;
 }
 
 vluint64_t main_time = 0;
