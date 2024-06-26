@@ -9,9 +9,13 @@ main:
     la              a0, vdata_start
 
     li              t0, 8
+    
     vsetvli         t0, t0, e16,m1,tu,mu
-
+    
     vle16.v         v0, (a0)
+    
+    vsetvli         t0, t0, e32,m2,tu,mu
+    
     vsext.vf2       v4, v0
     vse32.v         v4, (a0)
 

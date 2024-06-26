@@ -437,7 +437,8 @@ module vproc_pipeline_wrapper import vproc_pkg::*; #(
         end
 
         state_init.op_flags[0].vreg   = pipe_in_data_i.rs2.vreg;
-        state_init.op_flags[0].narrow = pipe_in_data_i.widenarrow == OP_WIDENING;
+        state_init.op_flags[0].narrow = (pipe_in_data_i.widenarrow == OP_WIDENING || pipe_in_data_i.widenarrow == OP_WIDENING_EXT2 || pipe_in_data_i.widenarrow == OP_WIDENING_EXT4);
+        state_init.op_flags[0].vf4_ext = (pipe_in_data_i.widenarrow == OP_WIDENING_EXT4);
         state_init.op_vaddr[0]        = pipe_in_data_i.rs2.r.vaddr;
         state_init.op_xval [0]        = pipe_in_data_i.rs2.r.xval;
 

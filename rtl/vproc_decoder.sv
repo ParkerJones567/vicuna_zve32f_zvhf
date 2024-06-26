@@ -654,7 +654,7 @@ module vproc_decoder #(
                             mode_o.alu.cmp      = 1'b0;
                             vxrm_o              = VXRM_RDN;
                         end
-                        {6'b010010, 3'b010}: begin  // v[z|s]ext.vf2 VV
+                        {6'b010010, 3'b010}: begin  // v[z|s]ext.[vf2/vf4] VV
                             unit_o              = UNIT_ALU;
                             mode_o.alu.opx2.res = ALU_VSEL;
                             mode_o.alu.opx1.sel = ALU_SEL_MASK;
@@ -666,8 +666,19 @@ module vproc_decoder #(
                             mode_o.alu.cmp      = 1'b0;
                             mode_o.alu.sigext   = instr_vs1[0];
                             rs1_o.vreg          = 1'b0;
-                            instr_illegal       = (instr_vs1[4:1] != 4'b0011);
-                            widenarrow_o        = OP_WIDENING;
+                            unique case (instr_vs1[4:1])
+                                4'b0011 : begin
+                                    instr_illegal       = 1'b0;
+                                    widenarrow_o        = OP_WIDENING_EXT2;
+                                end
+                                4'b0010 : begin
+                                    instr_illegal       = 1'b0;
+                                    widenarrow_o        = OP_WIDENING_EXT4;
+                                end
+                                default : begin
+                                    instr_illegal       = 1'b1;
+                                end
+                           endcase
                         end
                         {6'b011000, 3'b010}: begin  // vmandnot VV
                             emul_override       = 1'b1;
@@ -1542,6 +1553,8 @@ module vproc_decoder #(
 
         end else begin
 
+
+            //change to unique case?
             if (widenarrow_o == OP_SINGLEWIDTH) begin
                 vsew_o = vsew_i;
                 unique case (lmul_i)
@@ -1555,6 +1568,41 @@ module vproc_decoder #(
                     default: ;
                 endcase
                 vl_o = vl_i;
+                
+                
+
+            end else if (widenarrow_o == OP_WIDENING_EXT2) begin
+                // unlike other widening ops, for [s/v]ext.vf2, eew, emul, and vl are already set correctly     
+                vsew_o = vsew_i;
+                unique case (lmul_i)
+                    LMUL_F8,
+                    LMUL_F4,
+                    LMUL_F2,
+                    LMUL_1: emul_o = EMUL_1;
+                    LMUL_2: emul_o = EMUL_2;
+                    LMUL_4: emul_o = EMUL_4;
+                    LMUL_8: emul_o = EMUL_8;
+                    default: ;
+                endcase
+                vl_o = vl_i;
+                
+                
+             end else if (widenarrow_o == OP_WIDENING_EXT4) begin
+                // unlike other widening ops, for [s/v]ext.vf4, eew, emul, and vl are already set correctly     
+                vsew_o = vsew_i;
+                unique case (lmul_i)
+                    LMUL_F8,
+                    LMUL_F4,
+                    LMUL_F2,
+                    LMUL_1: emul_o = EMUL_1;
+                    LMUL_2: emul_o = EMUL_2;
+                    LMUL_4: emul_o = EMUL_4;
+                    LMUL_8: emul_o = EMUL_8;
+                    default: ;
+                endcase
+                vl_o = vl_i;
+  
+                
             end else begin
                 // for widening or narrowing ops, eew and emul are increased to the next higher value,
                 // since those are the eew and emul that are used for the op itself; vl is doubled to
@@ -1603,26 +1651,31 @@ module vproc_decoder #(
     end
 
     // address masks (lower bits that must be 0) for registers based on EMUL:
-    logic [2:0] regaddr_mask, regaddr_mask_narrow;
+    logic [2:0] regaddr_mask, regaddr_mask_narrow, regaddr_mask_narrow_x4;
     always_comb begin
-        regaddr_mask        = DONT_CARE_ZERO ? '0 : 'x;
-        regaddr_mask_narrow = DONT_CARE_ZERO ? '0 : 'x;
+        regaddr_mask           = DONT_CARE_ZERO ? '0 : 'x;
+        regaddr_mask_narrow    = DONT_CARE_ZERO ? '0 : 'x;
+        regaddr_mask_narrow_x4 = DONT_CARE_ZERO ? '0 : 'x; //used for [s/z]ext.vf4
         unique case (emul_o)
             EMUL_1: begin
                 regaddr_mask        = 3'b000;
                 regaddr_mask_narrow = 3'b000; // fractional EMUL
+                regaddr_mask_narrow_x4 = 3'b000;
             end
             EMUL_2: begin
                 regaddr_mask        = 3'b001;
                 regaddr_mask_narrow = 3'b000;
+                regaddr_mask_narrow_x4 = 3'b000;
             end
             EMUL_4: begin
                 regaddr_mask        = 3'b011;
                 regaddr_mask_narrow = 3'b001;
+                regaddr_mask_narrow_x4 = 3'b000;
             end
             EMUL_8: begin
                 regaddr_mask        = 3'b111;
                 regaddr_mask_narrow = 3'b011;
+                regaddr_mask_narrow_x4 = 3'b001;
             end
             default: ;
         endcase
@@ -1645,6 +1698,16 @@ module vproc_decoder #(
             OP_WIDENING: begin
                 vs1_invalid = (instr_vs1 & {2'b00, regaddr_mask_narrow}) != 5'b0;
                 vs2_invalid = (instr_vs2 & {2'b00, regaddr_mask_narrow}) != 5'b0;
+                vd_invalid  = (instr_vd  & {2'b00, regaddr_mask       }) != 5'b0;
+            end
+            OP_WIDENING_EXT2: begin
+                vs1_invalid = (instr_vs1 & {2'b00, regaddr_mask_narrow}) != 5'b0;
+                vs2_invalid = (instr_vs2 & {2'b00, regaddr_mask_narrow}) != 5'b0;
+                vd_invalid  = (instr_vd  & {2'b00, regaddr_mask       }) != 5'b0;
+            end
+            OP_WIDENING_EXT4: begin
+                vs1_invalid = (instr_vs1 & {2'b00, regaddr_mask_narrow_x4}) != 5'b0;
+                vs2_invalid = (instr_vs2 & {2'b00, regaddr_mask_narrow_x4}) != 5'b0;
                 vd_invalid  = (instr_vd  & {2'b00, regaddr_mask       }) != 5'b0;
             end
             OP_WIDENING_VS2: begin

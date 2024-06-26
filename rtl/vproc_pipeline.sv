@@ -381,6 +381,7 @@ module vproc_pipeline import vproc_pkg::*; #(
             op_count[i] = OP_ALT_COUNTER[i] ? state_next.alt_count : state_next.count;
         end
     end
+
     always_comb begin
         op_load_next  = '0;
         op_shift_next = '0;
@@ -399,7 +400,7 @@ module vproc_pipeline import vproc_pkg::*; #(
             else if (~aux_count_used | (state_next.aux_count == '0) | pipe_in_ready_o) begin
                 if (~OP_MASK[i]) begin
                     if ((op_count[i].part.low == '0) &
-                        (~OP_NARROW[i] | ~state_next.op_flags[i].narrow | ~op_count[i].part.mul[0])
+                        (~OP_NARROW[i] | ~state_next.op_flags[i].narrow | (~op_count[i].part.mul[0] & (~op_count[i].part.mul[1] | ~state_next.op_flags[i].vf4_ext)))
                     ) begin
                         op_load_next[i] = OP_ALWAYS_VREG[i] | state_next.op_flags[i].vreg;
 
@@ -425,10 +426,11 @@ module vproc_pipeline import vproc_pkg::*; #(
                         end
                     end
 
-                    // Operands are shifted after OP_W bits have been consumed.
+                    // Operands are shifted after OP_W bits have been consumed. v[s/z]ext.vf4 consumes bits at 1/2 the rate of other instructions
                     if ((op_count[i].val & ~({COUNTER_W{1'b1}} << $clog2(OP_W[i] / COUNTER_OP_W))) == '0) begin
                         op_shift_next[i] = ~OP_NARROW[i] | ~state_next.op_flags[i].narrow |
-                                           ~op_count[i].val[$clog2(OP_W[i] / COUNTER_OP_W)];
+                                           ((~op_count[i].val[$clog2(OP_W[i] / COUNTER_OP_W) + 1] | ~state_next.op_flags[i].vf4_ext) &
+                                           ~op_count[i].val[$clog2(OP_W[i] / COUNTER_OP_W)]);
                     end
                 end else begin
                     // Masks are only fetched in the first cycle but never anytime later

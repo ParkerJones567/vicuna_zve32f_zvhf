@@ -80,11 +80,13 @@ typedef enum logic [1:0] {
     EVL_MAX      // set EVL to the maximum value for the current config
 } evl_policy;
 
-typedef enum logic [1:0] {
-    OP_SINGLEWIDTH,  // neither widening nor narrowing
-    OP_WIDENING,     // widening operation with 2*SEW =   SEW op SEW
-    OP_WIDENING_VS2, // widening operation with 2*SEW = 2*SEW op SEW
-    OP_NARROWING     // narrowing operating with  SEW = 2*SEW op SEW
+typedef enum logic [2:0] {
+    OP_SINGLEWIDTH,    // neither widening nor narrowing
+    OP_WIDENING,       // widening operation with 2*SEW =   SEW op SEW
+    OP_WIDENING_VS2,   // widening operation with 2*SEW = 2*SEW op SEW
+    OP_NARROWING,      // narrowing operating with  SEW = 2*SEW op SEW
+    OP_WIDENING_EXT2,  // widening operation with SEW = op 1/2*SEW (for [s/z]ext2)
+    OP_WIDENING_EXT4   // widening operation with SEW = op 1/4*SEW (for [s/z]ext4)
 } op_widenarrow;
 
 // fixed-point rounding mode
@@ -322,6 +324,7 @@ typedef struct packed {
     logic vreg;
     logic elemwise;
     logic narrow;
+    logic vf4_ext;
     logic sigext;
 } unpack_flags;
 

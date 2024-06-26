@@ -12,6 +12,9 @@ main:
     vsetvli         t0, t0, e8,m1,tu,mu
 
     vle8.v          v0, (a0)
+    
+    vsetvli         t0, t0, e16,m2,tu,mu
+
     vsext.vf2       v4, v0
     vse16.v         v4, (a0)
 

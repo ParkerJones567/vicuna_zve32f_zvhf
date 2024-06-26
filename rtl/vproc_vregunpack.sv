@@ -378,8 +378,12 @@ module vproc_vregunpack
                                 endcase
                             end
                         end
-                        // shift down upper half of operand part to support narrow operands
-                        else if (OP_NARROW[i]) begin
+                       
+                        else if (op_load_flags[i].vf4_ext) begin
+                             // shift down upper 3/4 of operand part to support narrow operands for [s/z]ext.vf4
+                            op_default[(3*OP_W[i])/4-1:0] = op_buffer[i][OP_W[i]-1:(OP_W[i])/4];  
+                        end else if (OP_NARROW[i]) begin
+                             // shift down upper half of operand part to support narrow operands
                             op_default[OP_W[i]/2-1:0] = op_buffer[i][OP_W[i]-1:OP_W[i]/2];
                         end
                     end
@@ -408,9 +412,12 @@ module vproc_vregunpack
     endgenerate
 
     // Operand extraction logic
+    logic [MAX_VPORT_W-1:0] op_buffer_verif;
+    
     generate
         for (genvar i = 0; i < OP_CNT; i++) begin
             always_comb begin
+                op_buffer_verif = op_buffer[0];
                 // operand is lower part of operand buffer by default
                 op_data[i]              = DONT_CARE_ZERO ? '0 : 'x;
                 op_data[i][OP_W[i]-1:0] = op_buffer[i][OP_W[i]-1:0];
@@ -445,11 +452,11 @@ module vproc_vregunpack
                         endcase
                     end
                 end else begin
-                    // extend each element to twice its size if this operand is narrow
+                    // extend each element to twice its size if this operand is narrow.  If this is a vf4 extension extend to 4 times its size
                     if (OP_NARROW[i] & op_extract_flags[i].narrow) begin
                         op_data[i] = DONT_CARE_ZERO ? '0 : 'x;
-                        unique case (op_extract_eew[i])
-                            VSEW_16: begin
+                        unique case ({op_extract_eew[i], op_extract_flags[i].vf4_ext})
+                            {VSEW_16, 1'b0}: begin
                                 for (int j = 0; j < OP_W[i] / 16; j++) begin
                                     op_data[i][16*j +: 16] = {
                                         // upper bits are either sign or zero extended
@@ -458,12 +465,21 @@ module vproc_vregunpack
                                     };
                                 end
                             end
-                            VSEW_32: begin
+                            {VSEW_32, 1'b0}: begin
                                 for (int j = 0; j < OP_W[i] / 32; j++) begin
                                     op_data[i][32*j +: 32] = {
                                         // upper bits are either sign or zero extended
                                         {16{op_extract_flags[i].sigext & op_buffer[i][16*j + 15]}},
                                         op_buffer[i][16*j +: 16]
+                                    };
+                                end
+                            end
+                            {VSEW_32, 1'b1}: begin // case for vf4_sign_extension
+                                for (int j = 0; j < OP_W[i] / 32; j++) begin
+                                    op_data[i][32*j +: 32] = {
+                                        // upper bits are either sign or zero extended
+                                        {24{op_extract_flags[i].sigext & op_buffer[i][8*j + 7]}},
+                                        op_buffer[i][8 *j +: 8]
                                     };
                                 end
                             end
