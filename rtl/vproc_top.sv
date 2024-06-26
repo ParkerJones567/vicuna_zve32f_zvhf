@@ -465,6 +465,29 @@ module vproc_top import vproc_pkg::*; #(
 `endif
 
 `ifdef SCALAR_FPU_ON
+    
+    `ifdef ZFH_ON
+    
+        parameter C_XF16 = 1'b1;
+        
+        parameter fpnew_pkg::fpu_features_t FEATURES = '{
+                                                Width:         fpu_ss_pkg::C_FLEN,
+                                                EnableVectors: fpu_ss_pkg::C_XFVEC,
+                                                EnableNanBox:  1'b0,
+                                                FpFmtMask:     {
+                                                    fpu_ss_pkg::C_RVF, fpu_ss_pkg::C_RVD, C_XF16, fpu_ss_pkg::C_XF8, fpu_ss_pkg::C_XF16ALT
+                                                }, IntFmtMask: {
+                                                    fpu_ss_pkg::C_XFVEC && fpu_ss_pkg::C_XF8, fpu_ss_pkg::C_XFVEC && (C_XF16 || fpu_ss_pkg::C_XF16ALT), 1'b1, 1'b0
+                                                }};
+        
+        
+    `else
+    
+        parameter C_XF16 = 1'b0;
+        
+        parameter fpnew_pkg::fpu_features_t FEATURES = fpu_ss_pkg::FPU_FEATURES;
+    
+    `endif
 
      if_xif #(
         .X_NUM_RS    ( 3  ),
@@ -476,10 +499,11 @@ module vproc_top import vproc_pkg::*; #(
 
     fpu_ss #(
     .PULP_ZFINX           ( 0 ),
-    .INPUT_BUFFER_DEPTH   ( 1 ), //might need to make this 3, as this is the max number of fp instructions that can be in the pipeline
+    .RISCV_ZFH            ( C_XF16 ), //This bit is unused for configuration, compiler flag ZFH_ON was used instead.
+    .INPUT_BUFFER_DEPTH   ( 1 ), //Needs to be set to 1 otherwise locks up.
     .OUT_OF_ORDER         ( 0 ),
     .FORWARDING           ( 0 ),
-    .FPU_FEATURES         ( fpu_ss_pkg::FPU_FEATURES),
+    .FPU_FEATURES         ( FEATURES ),
     .FPU_IMPLEMENTATION   ( fpu_ss_pkg::FPU_IMPLEMENTATION )
     ) fpu_ss_i (
         // clock and reset
