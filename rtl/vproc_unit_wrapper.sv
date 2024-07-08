@@ -457,6 +457,49 @@ module vproc_unit_wrapper import vproc_pkg::*; #(
             assign pipe_out_instr_done_o     = (~flushing_q & unit_out_ctrl.last_cycle & ~unit_out_ctrl.requires_flush                                ) | flushing_last_cycle;
             assign pipe_out_pend_clear_o     = (~flushing_q & unit_out_ctrl.last_cycle & ~unit_out_ctrl.requires_flush & ~unit_out_ctrl.mode.elem.xreg) | flushing_last_cycle;
             assign pipe_out_pend_clear_cnt_o = unit_out_ctrl.emul; // TODO reductions always have destination EMUL == 1
+        end 
+        else if (UNIT == UNIT_DIV) begin
+            CTRL_T                 unit_out_ctrl;
+            logic [MAX_OP_W  -1:0] unit_out_res;
+            logic [MAX_OP_W/8-1:0] unit_out_mask;
+            vproc_div #(
+                .DIV_OP_W         ( MAX_OP_W                                    ),
+                .CTRL_T           ( CTRL_T                                      )
+            ) div (
+                .clk_i            ( clk_i                                       ),
+                .async_rst_ni     ( async_rst_ni                                ),
+                .sync_rst_ni      ( sync_rst_ni                                 ),
+                .pipe_in_valid_i  ( pipe_in_valid_i                             ),
+                .pipe_in_ready_o  ( pipe_in_ready_o                             ),
+                .pipe_in_ctrl_i   ( pipe_in_ctrl_i                              ),
+                .pipe_in_op1_i    ( pipe_in_op_data_i[1]                        ),
+                .pipe_in_op2_i    ( pipe_in_op_data_i[0]                        ),
+                .pipe_in_mask_i   ( pipe_in_op_data_i[OP_CNT-1][MAX_OP_W/8-1:0] ),
+                .pipe_out_valid_o ( pipe_out_valid_o                            ),
+                .pipe_out_ready_i ( pipe_out_ready_i                            ),
+                .pipe_out_ctrl_o  ( unit_out_ctrl                               ),
+                .pipe_out_res_o   ( unit_out_res                                ),
+                .pipe_out_mask_o  ( unit_out_mask                               )
+            );
+            always_comb begin
+                pipe_out_instr_id_o = unit_out_ctrl.id;
+                pipe_out_eew_o      = unit_out_ctrl.eew;
+                pipe_out_vaddr_o    = unit_out_ctrl.res_vaddr;
+                pipe_out_res_store_o = '0;
+                pipe_out_res_valid_o = '0;
+                pipe_out_res_flags_o = '{default: pack_flags'('0)};
+                pipe_out_res_data_o  = '0;
+                pipe_out_res_mask_o  = '0;
+                pipe_out_res_flags_o[0].shift           = unit_out_ctrl.res_shift;
+                pipe_out_res_store_o[0]                 = unit_out_ctrl.res_store;
+                pipe_out_res_valid_o[0]                 = pipe_out_valid_o;
+                pipe_out_res_data_o [0]                 = unit_out_res;
+                pipe_out_res_mask_o [0][MAX_OP_W/8-1:0] = unit_out_mask;
+            end
+            assign pipe_out_pend_clear_o                = unit_out_ctrl.res_store;
+            assign pipe_out_pend_clear_cnt_o            = '0;
+            assign pipe_out_instr_done_o                = unit_out_ctrl.last_cycle;
+            assign pipe_out_res_flags_o[0].shift        = unit_out_ctrl.res_shift;
         end
     endgenerate
 

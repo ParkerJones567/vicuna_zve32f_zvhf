@@ -36,6 +36,12 @@ ifeq ($(VPROC_CONFIG), dual)
   VREG_W          ?= 128
   VPROC_PIPELINES ?= $(VMEM_W):VLSU,VALU,VELEM $(VPIPE_W_VMUL):VMUL,VSLD
 else
+ifeq ($(VPROC_CONFIG), dual-div)
+  VPORT_POLICY    ?= some
+  VMEM_W          ?= 32
+  VREG_W          ?= 128
+  VPROC_PIPELINES ?= $(VMEM_W):VLSU,VALU,VELEM $(VPIPE_W_VMUL):VMUL,VSLD,VDIV
+else
 ifeq ($(VPROC_CONFIG), triple)
   VPORT_POLICY    ?= some
   VMEM_W          ?= 32
@@ -50,6 +56,7 @@ ifeq ($(VPROC_CONFIG), legacy)
                                     $(VPIPE_W_DFLT):VSLD 32:VELEM
 else
 $(error Unknown vector coprocessor configuration $(VPROC_CONFIG))
+endif
 endif
 endif
 endif
@@ -102,7 +109,7 @@ $(VPROC_CONFIG_PKG):
 	    width=`echo $$pipe | cut -d ":" -f 1`;                                                    \
 	    unit_str=`echo $$pipe | cut -d ":" -f 2 | sed 's/,/, /g'`;                                \
 	    unit_mask=`echo $$pipe | cut -d ":" -f 2 | sed 's/,/ | /g' |                              \
-	               sed "s/V\(LSU\|ALU\|MUL\|SLD\|ELEM\)/(UNIT_CNT'(1) << UNIT_\1)/g"`;            \
+	               sed "s/V\(LSU\|ALU\|MUL\|SLD\|ELEM\|DIV\)/(UNIT_CNT'(1) << UNIT_\1)/g"`;            \
 	    vport_cnt=1;                                                                              \
 	    if echo "$$pipe" | grep -q "VMUL" && [ $$(($$width * 4)) -gt "$(VREG_W)" ]; then          \
 	        vport_cnt=2;                                                                          \

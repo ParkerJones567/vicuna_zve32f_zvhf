@@ -2,7 +2,6 @@
 // Licensed under the Solderpad Hardware License v2.1, see LICENSE.txt for details
 // SPDX-License-Identifier: Apache-2.0 WITH SHL-2.1
 
-
 package vproc_pkg;
 
 `define VPROC_OP_MODE_UNION
@@ -101,6 +100,7 @@ typedef enum logic [2:0] {
     UNIT_LSU,
     UNIT_ALU,
     UNIT_MUL,
+    UNIT_DIV,
     UNIT_SLD,
     UNIT_ELEM,
     // pseudo-units (used for instructions that require no unit):
@@ -108,7 +108,7 @@ typedef enum logic [2:0] {
 } op_unit;
 
 // The number of different types of execution units (excludes pseudo-units)
-parameter int unsigned UNIT_CNT = 5;
+parameter int unsigned UNIT_CNT = 6;
 
 typedef enum logic [1:0] {
     COUNT_INC_1,
@@ -209,6 +209,24 @@ typedef struct packed {
 `endif
 } op_mode_mul;
 
+//Ideally include this from CV32E40X package
+typedef enum logic [1:0]
+{
+    DIV_DIVU,
+    DIV_DIV,
+    DIV_REMU,
+    DIV_REM
+ } div_opcode_e;
+ 
+
+typedef struct packed {
+    logic       masked;
+    div_opcode_e    op;
+`ifdef VPROC_OP_MODE_UNION
+    logic [1:0] unused;
+`endif
+} op_mode_div;
+
 typedef enum logic [0:0] {
     SLD_UP,
     SLD_DOWN
@@ -295,6 +313,7 @@ typedef struct packed {
     op_mode_sld  sld;
     op_mode_elem elem;
     op_mode_cfg  cfg;
+    op_mode_div  div;
 } op_mode;
 
 // source register type:

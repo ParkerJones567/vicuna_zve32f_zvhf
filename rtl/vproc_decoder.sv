@@ -1299,6 +1299,35 @@ module vproc_decoder #(
                             mode_o.mul.masked     = instr_masked;
                         end
 
+                        // DIV unit:
+                        {6'b100000, 3'b010},        // vdivu VV
+                        {6'b100000, 3'b110}: begin  // vdivu VX
+                            unit_o                = UNIT_DIV;
+                            mode_o.div.op         = DIV_DIVU;
+                            mode_o.div.masked     = instr_masked;
+                            widenarrow_o          = OP_SINGLEWIDTH;
+                        end
+                        {6'b100001, 3'b010},        // vdiv VV
+                        {6'b100001, 3'b110}: begin  // vdiv VX
+                            unit_o                = UNIT_DIV;
+                            mode_o.div.op         = DIV_DIV;
+                            mode_o.div.masked     = instr_masked;
+                            widenarrow_o          = OP_SINGLEWIDTH;
+                        end
+                        {6'b100010, 3'b010},        // vremu VV
+                        {6'b100010, 3'b110}: begin  // vremu VX
+                            unit_o                = UNIT_DIV;
+                            mode_o.div.op         = DIV_REMU;
+                            mode_o.div.masked     = instr_masked;
+                            widenarrow_o          = OP_SINGLEWIDTH;
+                        end
+                        {6'b100011, 3'b010},        // vrem VV
+                        {6'b100011, 3'b110}: begin  // vrem VX
+                            unit_o                = UNIT_DIV;
+                            mode_o.div.op         = DIV_REM;
+                            mode_o.div.masked     = instr_masked;
+                            widenarrow_o          = OP_SINGLEWIDTH;
+                        end
 
                         // SLD unit:
                         {6'b001110, 3'b011},        // vslideup VI
@@ -1774,5 +1803,6 @@ module vproc_decoder #(
     assign op_illegal = (unit_o != UNIT_CFG) & (vs1_invalid | vs2_invalid | vd_invalid | vtype_invalid | emul_invalid);
 
     assign valid_o   = instr_valid_i & (~instr_illegal) & (~op_illegal);
+
 
 endmodule
