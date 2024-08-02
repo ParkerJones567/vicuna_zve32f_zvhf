@@ -4,7 +4,7 @@
 
 
 module vproc_div #(
-        parameter int unsigned        DIV_OP_W       = 64,   // DIV unit operand width in bits.  Operates on 32 bit wide operands (SEW8 and SEW16 should be extended in regunpack)
+        parameter int unsigned        DIV_OP_W       = 64,   // DIV unit operand width in bits.
         parameter type                CTRL_T         = logic
     )(
         input  logic                  clk_i,
@@ -96,7 +96,7 @@ module vproc_div #(
     logic [DIV_OP_W/8-1:0] vl_mask;
 
     assign vl_mask        = ~unit_ctrl_q.vl_part_0 ? ({(DIV_OP_W/8){1'b1}} >> (~unit_ctrl_q.vl_part)) : '0;
-    assign pipe_out_mask_o = (unit_ctrl_q.mode.mul.masked ? operand_mask_q : {(DIV_OP_W/8){1'b1}}) & vl_mask;
+    assign pipe_out_mask_o = (unit_ctrl_q.mode.div.masked ? operand_mask_q : {(DIV_OP_W/8){1'b1}}) & vl_mask;
 
     ///////////////////////////////////////////////////////////////////////////
 
@@ -175,7 +175,7 @@ module vproc_div #(
 
     ///////////////////////////////////////////////////////////////////////////
     // DIV ARITHMETIC
-    // Each div unit handles one 32 bit result.  Output must be returned to desired width in regpack unit
+    // Each div unit handles one 32 bit result.
 
     logic [DIV_OP_W/32  -1:0] div_en, div_ready_o, div_valid_o;
     logic [DIV_OP_W  -1:0] div_in_opa, div_in_opb;
