@@ -489,6 +489,15 @@ module vproc_top import vproc_pkg::*; #(
     
     `endif
 
+    `ifdef VICUNA_F_ON
+    // Interface for Vicuna Arbiter for access to the FP Regfile
+    logic [31:0] fp_scoreboard;
+    logic [ 4:0] fp_raddr;
+    logic [31:0] fp_rdata; 
+
+    `endif
+
+
      if_xif #(
         .X_NUM_RS    ( 3  ),
         .X_MEM_WIDTH ( 32 ),
@@ -509,6 +518,14 @@ module vproc_top import vproc_pkg::*; #(
         // clock and reset
         .clk_i                (clk_i),
         .rst_ni               (sync_rst_n),
+
+        `ifdef VICUNA_F_ON
+        // Interface for Vicuna Arbiter for access to the FP Regfile
+        .vicuna_rd_scoreboard_o(fp_scoreboard),
+        .vicuna_raddr_i(fp_raddr),
+        .vicuna_rdata_o(fp_rdata),
+
+        `endif
 
         // Compressed Interface (Not currently used)
         .x_compressed_valid_i (),
@@ -535,6 +552,8 @@ module vproc_top import vproc_pkg::*; #(
         // Memory Result Interface
         .x_mem_result_valid_i ( fpu_ss_xif.mem_result_valid ),
         .x_mem_result_i       ( fpu_ss_xif.mem_result ),
+
+
 
         // Result Interface
         .x_result_valid_o     ( fpu_ss_xif.result_valid ),
@@ -615,10 +634,31 @@ module vproc_top import vproc_pkg::*; #(
     assign vcore_xif.issue_req.mode     = host_xif.issue_req.mode;         //Broadcast from host
     assign fpu_ss_xif.issue_req.id       = host_xif.issue_req.id;           //Broadcast from host
     assign vcore_xif.issue_req.id       = host_xif.issue_req.id;           //Broadcast from host
+
+    
     assign fpu_ss_xif.issue_req.rs       = host_xif.issue_req.rs;           //Broadcast from host
-    assign vcore_xif.issue_req.rs       = host_xif.issue_req.rs;           //Broadcast from host
     assign fpu_ss_xif.issue_req.rs_valid = host_xif.issue_req.rs_valid;     //Broadcast from host
+    `ifdef VICUNA_F_ON
+    //when Zve32f is enabled, rs may be an int value from CV32E40X or a float value from FPU_SS
+    always_comb begin
+        //Offloaded instruction needs no scalar float value
+        vcore_xif.issue_req.rs = host_xif.issue_req.rs;
+        vcore_xif.issue_req.rs_valid = host_xif.issue_req.rs_valid;
+        //Offloaded instruction is a vector instruction and involves a scalar floating point value as input
+        //OPCODE Vector and OPFVF
+        fp_raddr = '0;
+        if (host_xif.issue_req.instr[6:0] == 7'h57 & host_xif.issue_req.instr[14:12] == 3'b101) begin
+            fp_raddr = host_xif.issue_req.instr[19:15]; //fpr address is rs1 in this case
+            vcore_xif.issue_req.rs = {'0, fp_rdata};//rs1 is replaced with the floating point value
+            vcore_xif.issue_req.rs_valid = (host_xif.issue_req.rs_valid & (~fp_scoreboard[host_xif.issue_req.instr[19:15]])); //only valid if fp reg is valid on the scoreboard    
+        end
+    end
+
+    `else
+    assign vcore_xif.issue_req.rs       = host_xif.issue_req.rs;           //Broadcast from host
     assign vcore_xif.issue_req.rs_valid = host_xif.issue_req.rs_valid;     //Broadcast from host
+    `endif
+
     assign host_xif.issue_resp.accept    = fpu_ss_xif.issue_resp.accept | vcore_xif.issue_resp.accept;         // Arbitrate: each unit outputs 0 if not responding.  correct output is OR of both  
     assign host_xif.issue_resp.writeback = fpu_ss_xif.issue_resp.writeback | vcore_xif.issue_resp.writeback;      
     assign host_xif.issue_resp.dualwrite = fpu_ss_xif.issue_resp.dualwrite | vcore_xif.issue_resp.dualwrite;      

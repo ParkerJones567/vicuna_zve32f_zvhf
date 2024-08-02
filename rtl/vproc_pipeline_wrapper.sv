@@ -101,7 +101,7 @@ module vproc_pipeline_wrapper import vproc_pkg::*; #(
     //  +-----+------+----------+----------------+-----------------------------------------------+
     //  |  0  | data | vs2 (vd) |      all       | Only MUL may change address to vd             |
     //  |  1  | data | vs1 (vd) | all except SLD | Only LSU uses vd as address instead of vs1    |
-    //  |  2  | data |  vd/vs2  |      MUL       | MUL may use either vd or vs2 as address       |
+    //  |  2  | data |  vd/vs2  |   MUL,   FPU   | MUL and FPU may use either vd or vs2 as address       |
     //  | -3  | data | dynamic  |     ELEM       | Index-based dynamic address within vreg group |
     //  | -2  | mask |   vs2    |     ELEM       | Mask operand for some ELEM operations         |
     //  | -1  | mask |    v0    |      all       | Mask operand for masked operations            |
@@ -112,7 +112,7 @@ module vproc_pipeline_wrapper import vproc_pkg::*; #(
     // - ELEM unit additionally requires indices -3 and -2, hence a minimum of 5 operands
     // - if MUL and ELEM units are both present in same pipeline, then all 6 operands are required
     // - in case a pipeline contains only the SLD unit the operand count is 2 (indices 0 and -1)
-    localparam int unsigned OP_CNT        = UNITS[UNIT_MUL] ? (
+    localparam int unsigned OP_CNT        = (UNITS[UNIT_MUL] | UNITS[UNIT_FPU]) ? (
                                                 UNITS[UNIT_ELEM] ? 6 : 4
                                             ) : (
                                                 UNITS[UNIT_ELEM] ? 5 : (
@@ -127,7 +127,7 @@ module vproc_pipeline_wrapper import vproc_pkg::*; #(
     // should be fetched at the latest possible stage, since the pipeline waits until the alt count
     // completes its cycle before accepting the next instruction.
     localparam int unsigned OP0_SRC   = 0;
-    localparam int unsigned OP1_SRC   = (VPORT_CNT >= (UNITS[UNIT_MUL] ? 3 : 2)) ? 1 : 0;
+    localparam int unsigned OP1_SRC   = (VPORT_CNT >= ((UNITS[UNIT_MUL] | UNITS[UNIT_FPU]) ? 3 : 2)) ? 1 : 0;
     localparam int unsigned OP2_SRC   = VPORT_CNT - 1;
     localparam int unsigned MIN_STAGE = 1; // first possible unpack stage
     // start by fetching op 0, then op1, except for ELEM unit which needs to fetch op1 first since
@@ -147,7 +147,7 @@ module vproc_pipeline_wrapper import vproc_pkg::*; #(
                                         );
 
     // Verify that shared read ports are sufficiently wide
-    if (UNITS[UNIT_MUL] & (OP0_SRC == OP1_SRC) & (OP0_SRC == OP2_SRC) & (MAX_OP_W * 2 >= VPORT_W[OP0_SRC])) begin
+    if ((UNITS[UNIT_MUL] | UNITS[UNIT_FPU]) & (OP0_SRC == OP1_SRC) & (OP0_SRC == OP2_SRC) & (MAX_OP_W * 2 >= VPORT_W[OP0_SRC])) begin
         $fatal(1, "If operands 0, 1, and 2 share the same source read port, then the operand ",
                   "width must not be larger than one quarter of the read port width (the current ",
                   "read port width is %d bits, hence the operand width can be at most %d bits; ",
@@ -165,12 +165,12 @@ module vproc_pipeline_wrapper import vproc_pkg::*; #(
     // operand flags
     localparam bit OP_DYN_ADDR_OFFSET     = UNITS[UNIT_ELEM];   // operand with dynamic addr used
     localparam bit OP_SECOND_MASK         = UNITS[UNIT_ELEM];   // second mask operand used
-    localparam bit OP0_NARROW             = UNITS[UNIT_MUL] | UNITS[UNIT_ALU] | UNITS[UNIT_ELEM];
-    localparam bit OP1_NARROW             = UNITS[UNIT_MUL] | UNITS[UNIT_ALU];
-    localparam bit OP1_XREG               = UNITS[UNIT_MUL] | UNITS[UNIT_ALU];
-    localparam bit OP0_ELEMWISE           = UNITS[UNIT_LSU] | UNITS[UNIT_ELEM];
-    localparam bit OP1_ELEMWISE           = UNITS[UNIT_LSU] | UNITS[UNIT_ELEM];
-    localparam bit OPMASK_ELEMWISE        = UNITS[UNIT_LSU] | UNITS[UNIT_ELEM];
+    localparam bit OP0_NARROW             = UNITS[UNIT_MUL] | UNITS[UNIT_ALU] | UNITS[UNIT_ELEM] | UNITS[UNIT_FPU];
+    localparam bit OP1_NARROW             = UNITS[UNIT_MUL] | UNITS[UNIT_ALU] | UNITS[UNIT_FPU];
+    localparam bit OP1_XREG               = UNITS[UNIT_MUL] | UNITS[UNIT_ALU] | UNITS[UNIT_DIV] | UNITS[UNIT_FPU];
+    localparam bit OP0_ELEMWISE           = UNITS[UNIT_LSU] | UNITS[UNIT_ELEM] | UNITS[UNIT_FPU];
+    localparam bit OP1_ELEMWISE           = UNITS[UNIT_LSU] | UNITS[UNIT_ELEM] | UNITS[UNIT_FPU];
+    localparam bit OPMASK_ELEMWISE        = UNITS[UNIT_LSU] | UNITS[UNIT_ELEM] | UNITS[UNIT_FPU];
     localparam bit OP0_ALT_COUNTER        = UNITS[UNIT_SLD];
 
     // result count and default width
@@ -179,8 +179,8 @@ module vproc_pipeline_wrapper import vproc_pkg::*; #(
 
     // result flags
     localparam bit RES0_ALWAYS_VREG       = ~UNITS[UNIT_LSU] & ~UNITS[UNIT_ALU] & ~UNITS[UNIT_ELEM];
-    localparam bit RES0_NARROW            = UNITS[UNIT_ALU];
-    localparam bit RES0_ALLOW_ELEMWISE    = UNITS[UNIT_LSU] | UNITS[UNIT_ELEM];
+    localparam bit RES0_NARROW            = UNITS[UNIT_ALU];//Might need to add FPU HERE from conversion ops
+    localparam bit RES0_ALLOW_ELEMWISE    = UNITS[UNIT_LSU] | UNITS[UNIT_ELEM] | UNITS[UNIT_FPU];
 
     // miscellaneous pipeline config
     localparam bit FIELD_COUNT_USED       = UNITS[UNIT_LSU];
@@ -216,13 +216,14 @@ module vproc_pipeline_wrapper import vproc_pkg::*; #(
     } state_t;
 
     // identify the unit of the supplied instruction
-    logic unit_lsu, unit_alu, unit_mul, unit_sld, unit_elem, unit_div;
+    logic unit_lsu, unit_alu, unit_mul, unit_sld, unit_elem, unit_div, unit_fpu;
     assign unit_lsu  = UNITS[UNIT_LSU ] & (pipe_in_data_i.unit == UNIT_LSU );
     assign unit_alu  = UNITS[UNIT_ALU ] & (pipe_in_data_i.unit == UNIT_ALU );
     assign unit_mul  = UNITS[UNIT_MUL ] & (pipe_in_data_i.unit == UNIT_MUL );
     assign unit_sld  = UNITS[UNIT_SLD ] & (pipe_in_data_i.unit == UNIT_SLD );
     assign unit_elem = UNITS[UNIT_ELEM] & (pipe_in_data_i.unit == UNIT_ELEM);
     assign unit_div  = UNITS[UNIT_DIV]  & (pipe_in_data_i.unit == UNIT_DIV);
+    assign unit_fpu  = UNITS[UNIT_FPU]  & (pipe_in_data_i.unit == UNIT_FPU);
 
     // identify the type of data that vs2 supplies for ELEM instructions
     logic elem_flush, elem_vs2_data, elem_vs2_mask, elem_vs2_dyn_addr;
@@ -402,8 +403,18 @@ module vproc_pipeline_wrapper import vproc_pkg::*; #(
             endcase
         end
 
+        //For reduction ops on FPU, need to change the counter increment
+        if (unit_fpu & pipe_in_data_i.mode.fpu.op_reduction) begin
+            state_init.count_inc = DONT_CARE_ZERO ? count_inc_e'('0) : count_inc_e'('x);
+            unique case (pipe_in_data_i.vsew)
+                VSEW_16: state_init.count_inc = COUNT_INC_2;
+                VSEW_32: state_init.count_inc = COUNT_INC_4;
+                default: ;
+            endcase
+        end
+
         state_init.field_count_init = unit_lsu ? pipe_in_data_i.mode.lsu.nfields : '0;
-        state_init.requires_flush = unit_elem & elem_flush;
+        state_init.requires_flush = (unit_elem & elem_flush) | (unit_fpu & pipe_in_data_i.mode.fpu.op_reduction);
         state_init.id             = pipe_in_data_i.id;
         state_init.unit           = pipe_in_data_i.unit;
         state_init.mode           = pipe_in_data_i.mode;
@@ -454,6 +465,7 @@ module vproc_pipeline_wrapper import vproc_pkg::*; #(
             unit_alu:  state_init.op_flags[OP_CNT-1].vreg = pipe_in_data_i.mode.alu.op_mask != ALU_MASK_NONE;
             unit_mul:  state_init.op_flags[OP_CNT-1].vreg = pipe_in_data_i.mode.mul.masked;
             unit_div:  state_init.op_flags[OP_CNT-1].vreg = pipe_in_data_i.mode.div.masked;
+            unit_fpu:  state_init.op_flags[OP_CNT-1].vreg = pipe_in_data_i.mode.div.masked;
             unit_sld:  state_init.op_flags[OP_CNT-1].vreg = pipe_in_data_i.mode.sld.masked;
             unit_elem: state_init.op_flags[OP_CNT-1].vreg = pipe_in_data_i.mode.elem.masked;
             default: ;
@@ -498,6 +510,17 @@ module vproc_pipeline_wrapper import vproc_pkg::*; #(
             state_init.op_vaddr[                OP_CNT-2    ]          = pipe_in_data_i.rs2.r.vaddr;
             state_init.op_flags[                OP_CNT-1    ].elemwise = 1'b1;
         end
+         if (unit_fpu) begin
+            //For widening ops always pad with 0s
+            state_init.op_flags[0].sigext                   = 1'b0;
+            state_init.op_flags[1].sigext                   = 1'b0;
+            state_init.op_flags[0].elemwise                 = pipe_in_data_i.mode.fpu.op_reduction;
+            state_init.op_flags[1].elemwise                 = pipe_in_data_i.mode.fpu.op_reduction;
+            state_init.op_flags[2].elemwise                 = pipe_in_data_i.mode.fpu.op_reduction;
+            state_init.op_flags[(OP_CNT >= 3) ? 2 : 0].vreg = (pipe_in_data_i.mode.fpu.op == FMADD | pipe_in_data_i.mode.fpu.op == FNMSUB);
+            state_init.op_vaddr[(OP_CNT >= 3) ? 2 : 0]      = pipe_in_data_i.rd.addr;
+
+         end
     end
 
 

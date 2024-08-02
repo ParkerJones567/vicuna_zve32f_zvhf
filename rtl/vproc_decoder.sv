@@ -50,6 +50,9 @@ module vproc_decoder #(
     cfg_emul   emul;
     evl_policy evl_pol;
 
+
+    logic test_cond;
+
     always_comb begin
         instr_illegal = 1'b0;
         emul_override = 1'b0;
@@ -270,8 +273,9 @@ module vproc_decoder #(
                         rs2_o.vreg    = 1'b1; // rs2 is a vector register
                         rs2_o.r.vaddr = instr_vs2;
                     end
-                    3'b100,         // OPIVX
-                    3'b110: begin   // OPMVX
+                    3'b100,          // OPIVX
+                    3'b101,          // OPFVF
+                    3'b110: begin    // OPMVX
                         rs1_o.vreg    = 1'b0; // rs1 is an x register
                         rs1_o.xreg    = 1'b1;
                         rs1_o.r.xval  = x_rs1_i;
@@ -1329,6 +1333,595 @@ module vproc_decoder #(
                             widenarrow_o          = OP_SINGLEWIDTH;
                         end
 
+                        `ifdef VICUNA_F_ON  
+                        //Only include Zve32f instructions when FPU is enabled
+                        //TODO: select rounding mode by adding extra read port to the F-CSR.  May need to confirm these flags are set correctly
+                        //TODO: F reduction operations will need extra logic in the V-FPU
+                        //TODO: F move from VREG to FREG will need extra write port for FPU_SS
+                        // Floating Point unit:
+                        {6'b000000, 3'b001},        // vfadd VV
+                        {6'b000000, 3'b101}: begin  // vfadd VF
+                            unit_o                = UNIT_FPU;
+                            mode_o.fpu.op         = ADD;
+                            mode_o.fpu.op_mod     = 1'b0;
+                            mode_o.fpu.op_rev     = 1'b0;
+                            mode_o.fpu.op_reduction = 1'b0;
+                            mode_o.fpu.rnd_mode   = RNE;//TODO:SELECT PROPERLY
+                            mode_o.fpu.masked     = instr_masked;
+                            mode_o.fpu.src_1_narrow = 1'b0;
+                            mode_o.fpu.src_2_narrow = 1'b0;
+                            widenarrow_o          = OP_SINGLEWIDTH;
+                        end
+
+                        {6'b000001, 3'b001}: begin  // vfredusum VV
+                            unit_o                = UNIT_FPU;
+                            mode_o.fpu.op         = ADD;
+                            mode_o.fpu.op_mod     = 1'b0; //Currently treating all reductions as ordered reductions.  TODO: improve performance by implementing unordered reductions more efficiently
+                            mode_o.fpu.op_rev     = 1'b0;
+                            mode_o.fpu.op_reduction = 1'b1;
+                            mode_o.fpu.rnd_mode   = RNE;//TODO:SELECT PROPERLY
+                            mode_o.fpu.masked     = instr_masked;
+                            mode_o.fpu.src_1_narrow = 1'b0;
+                            mode_o.fpu.src_2_narrow = 1'b0;
+                            widenarrow_o          = OP_SINGLEWIDTH;
+                        end
+
+                        {6'b000010, 3'b001},        // vfsub VV
+                        {6'b000010, 3'b101}: begin  // vfsub VF
+                            unit_o                = UNIT_FPU;
+                            mode_o.fpu.op         = ADD;
+                            mode_o.fpu.op_mod     = 1'b1;
+                            mode_o.fpu.op_rev     = 1'b0;
+                            mode_o.fpu.op_reduction = 1'b0;
+                            mode_o.fpu.rnd_mode   = RNE;//TODO:SELECT PROPERLY
+                            mode_o.fpu.masked     = instr_masked;
+                            mode_o.fpu.src_1_narrow = 1'b0;
+                            mode_o.fpu.src_2_narrow = 1'b0;
+                            widenarrow_o          = OP_SINGLEWIDTH;
+                        end
+                        {6'b000011, 3'b001}: begin  // vfredosum VV
+                            unit_o                = UNIT_FPU;
+                            mode_o.fpu.op         = ADD;
+                            mode_o.fpu.op_mod     = 1'b0; //Currently treating all reductions as ordered reductions.  TODO: improve performance by implementing unordered reductions more efficiently
+                            mode_o.fpu.op_rev     = 1'b0;
+                            mode_o.fpu.op_reduction = 1'b1;
+                            mode_o.fpu.rnd_mode   = RNE;//TODO:SELECT PROPERLY
+                            mode_o.fpu.masked     = instr_masked;
+                            mode_o.fpu.src_1_narrow = 1'b0;
+                            mode_o.fpu.src_2_narrow = 1'b0;
+                            widenarrow_o          = OP_SINGLEWIDTH;
+                        end
+
+                        {6'b000100, 3'b001},        // vfmin VV
+                        {6'b000100, 3'b101}: begin  // vfmin VF
+                            unit_o                = UNIT_FPU;
+                            mode_o.fpu.op         = MINMAX;
+                            mode_o.fpu.op_mod     = 1'b0;
+                            mode_o.fpu.op_rev     = 1'b0;
+                            mode_o.fpu.op_reduction = 1'b0;
+                            mode_o.fpu.rnd_mode   = RNE; //MIN/MAX opmode encoded in rounding mode
+                            mode_o.fpu.masked     = instr_masked;
+                            mode_o.fpu.src_1_narrow = 1'b0;
+                            mode_o.fpu.src_2_narrow = 1'b0;
+                            widenarrow_o          = OP_SINGLEWIDTH;
+                        end
+
+                        {6'b000101, 3'b001}: begin  // vfredmin VV
+                            unit_o                = UNIT_FPU;
+                            mode_o.fpu.op         = MINMAX;
+                            mode_o.fpu.op_mod     = 1'b0; //Currently treating all reductions as ordered reductions.  TODO: improve performance by implementing unordered reductions more efficiently
+                            mode_o.fpu.op_rev     = 1'b0;
+                            mode_o.fpu.op_reduction = 1'b1;
+                            mode_o.fpu.rnd_mode   = RNE;//MIN/MAX opmode encoded in rounding mode
+                            mode_o.fpu.masked     = instr_masked;
+                            mode_o.fpu.src_1_narrow = 1'b0;
+                            mode_o.fpu.src_2_narrow = 1'b0;
+                            widenarrow_o          = OP_SINGLEWIDTH;
+                        end
+
+                        {6'b000110, 3'b001},        // vfmax VV
+                        {6'b000110, 3'b101}: begin  // vfmax VF
+                            unit_o                = UNIT_FPU;
+                            mode_o.fpu.op         = MINMAX;
+                            mode_o.fpu.op_mod     = 1'b0;
+                            mode_o.fpu.op_rev     = 1'b0;
+                            mode_o.fpu.op_reduction = 1'b0;
+                            mode_o.fpu.rnd_mode   = RTZ;//MIN/MAX opmode encoded in rounding mode
+                            mode_o.fpu.masked     = instr_masked;
+                            mode_o.fpu.src_1_narrow = 1'b0;
+                            mode_o.fpu.src_2_narrow = 1'b0;
+                            widenarrow_o          = OP_SINGLEWIDTH;
+                        end
+                        {6'b000111, 3'b001}: begin  // vfredmax VV
+                            unit_o                = UNIT_FPU;
+                            mode_o.fpu.op         = MINMAX;
+                            mode_o.fpu.op_mod     = 1'b0; //Currently treating all reductions as ordered reductions.  TODO: improve performance by implementing unordered reductions more efficiently
+                            mode_o.fpu.op_rev     = 1'b0;
+                            mode_o.fpu.op_reduction = 1'b1;
+                            mode_o.fpu.rnd_mode   = RTZ;//MIN/MAX opmode encoded in rounding mode
+                            mode_o.fpu.masked     = instr_masked;
+                            mode_o.fpu.src_1_narrow = 1'b0;
+                            mode_o.fpu.src_2_narrow = 1'b0;
+                            widenarrow_o          = OP_SINGLEWIDTH;
+                        end
+
+                        {6'b001000, 3'b001},        // vfsgnj VV
+                        {6'b001000, 3'b101}: begin  // vfsgnj VF
+                            unit_o                = UNIT_FPU;
+                            mode_o.fpu.op         = SGNJ;
+                            mode_o.fpu.op_mod     = 1'b0;
+                            mode_o.fpu.op_rev     = 1'b0;
+                            mode_o.fpu.op_reduction = 1'b0;
+                            mode_o.fpu.rnd_mode   = RNE;//SGNJ OPMODE ENCODED HERE
+                            mode_o.fpu.masked     = instr_masked;
+                            mode_o.fpu.src_1_narrow = 1'b0;
+                            mode_o.fpu.src_2_narrow = 1'b0;
+                            widenarrow_o          = OP_SINGLEWIDTH;
+                        end
+                        
+                        {6'b001001, 3'b001},        // vfsgnjn VV
+                        {6'b001001, 3'b101}: begin  // vfsgnjn VF
+                            unit_o                = UNIT_FPU;
+                            mode_o.fpu.op         = SGNJ;
+                            mode_o.fpu.op_mod     = 1'b0;
+                            mode_o.fpu.op_rev     = 1'b0;
+                            mode_o.fpu.op_reduction = 1'b0;
+                            mode_o.fpu.rnd_mode   = RTZ;//SGNJ OPMODE ENCODED HERE
+                            mode_o.fpu.masked     = instr_masked;
+                            mode_o.fpu.src_1_narrow = 1'b0;
+                            mode_o.fpu.src_2_narrow = 1'b0;
+                            widenarrow_o          = OP_SINGLEWIDTH;
+                        end
+
+                        {6'b001010, 3'b001},        // vfsgnjx VV
+                        {6'b001010, 3'b101}: begin  // vfsgnjx VF
+                            unit_o                = UNIT_FPU;
+                            mode_o.fpu.op         = SGNJ;
+                            mode_o.fpu.op_mod     = 1'b0;
+                            mode_o.fpu.op_rev     = 1'b0;
+                            mode_o.fpu.op_reduction = 1'b0;
+                            mode_o.fpu.rnd_mode   = RDN;//SGNJ OPMODE ENCODED HERE
+                            mode_o.fpu.masked     = instr_masked;
+                            mode_o.fpu.src_1_narrow = 1'b0;
+                            mode_o.fpu.src_2_narrow = 1'b0;
+                            widenarrow_o          = OP_SINGLEWIDTH;
+                        end
+
+                        {6'b100000, 3'b001},        // vfdiv VV
+                        {6'b100000, 3'b101}: begin  // vfdiv VF
+                            unit_o                = UNIT_FPU;
+                            mode_o.fpu.op         = DIV;
+                            mode_o.fpu.op_mod     = 1'b0;
+                            mode_o.fpu.op_rev     = 1'b0;
+                            mode_o.fpu.op_reduction = 1'b0;
+                            mode_o.fpu.rnd_mode   = RNE;//TODO:SELECT PROPERLY
+                            mode_o.fpu.masked     = instr_masked;
+                            mode_o.fpu.src_1_narrow = 1'b0;
+                            mode_o.fpu.src_2_narrow = 1'b0;
+                            widenarrow_o          = OP_SINGLEWIDTH;
+                        end 
+                        
+                        {6'b100001, 3'b101}: begin  // vfrdiv VF 
+                            unit_o                = UNIT_FPU;
+                            mode_o.fpu.op         = DIV;
+                            mode_o.fpu.op_mod     = 1'b0;
+                            mode_o.fpu.op_rev     = 1'b1;
+                            mode_o.fpu.op_reduction = 1'b0;
+                            mode_o.fpu.rnd_mode   = RNE;//TODO:SELECT PROPERLY
+                            mode_o.fpu.masked     = instr_masked;
+                            mode_o.fpu.src_1_narrow = 1'b0;
+                            mode_o.fpu.src_2_narrow = 1'b0;
+                            widenarrow_o          = OP_SINGLEWIDTH;
+                        end
+
+                        {6'b100100, 3'b001},        // vfmul VV
+                        {6'b100100, 3'b101}: begin  // vfmul VF
+                            unit_o                = UNIT_FPU;
+                            mode_o.fpu.op         = MUL;
+                            mode_o.fpu.op_mod     = 1'b0;
+                            mode_o.fpu.op_rev     = 1'b0;
+                            mode_o.fpu.op_reduction = 1'b0;
+                            mode_o.fpu.rnd_mode   = RNE;//TODO:SELECT PROPERLY
+                            mode_o.fpu.masked     = instr_masked;
+                            mode_o.fpu.src_1_narrow = 1'b0;
+                            mode_o.fpu.src_2_narrow = 1'b0;
+                            widenarrow_o          = OP_SINGLEWIDTH;
+                        end
+
+                        {6'b100111, 3'b101}: begin  // vfrsub VF
+                            unit_o                = UNIT_FPU;
+                            mode_o.fpu.op         = ADD;
+                            mode_o.fpu.op_mod     = 1'b1;
+                            mode_o.fpu.op_rev     = 1'b1;
+                            mode_o.fpu.op_reduction = 1'b0;
+                            mode_o.fpu.rnd_mode   = RNE;//TODO:SELECT PROPERLY
+                            mode_o.fpu.masked     = instr_masked;
+                            mode_o.fpu.src_1_narrow = 1'b0;
+                            mode_o.fpu.src_2_narrow = 1'b0;
+                            widenarrow_o          = OP_SINGLEWIDTH;
+                        end
+
+                        {6'b101000, 3'b001},        // vfmadd VV
+                        {6'b101000, 3'b101}: begin  // vfmadd VF
+                            unit_o                = UNIT_FPU;
+                            mode_o.fpu.op         = FMADD;
+                            mode_o.fpu.op_mod     = 1'b0;
+                            mode_o.fpu.op_rev     = 1'b1;
+                            mode_o.fpu.op_reduction = 1'b0;
+                            mode_o.fpu.rnd_mode   = RNE;//TODO:SELECT PROPERLY
+                            mode_o.fpu.masked     = instr_masked;
+                            mode_o.fpu.src_1_narrow = 1'b0;
+                            mode_o.fpu.src_2_narrow = 1'b0;
+                            widenarrow_o          = OP_SINGLEWIDTH;
+                        end
+
+                        {6'b101001, 3'b001},        // vfnmadd VV
+                        {6'b101001, 3'b101}: begin  // vfnmadd VF
+                            unit_o                = UNIT_FPU;
+                            mode_o.fpu.op         = FNMSUB;
+                            mode_o.fpu.op_mod     = 1'b1;
+                            mode_o.fpu.op_rev     = 1'b1;
+                            mode_o.fpu.op_reduction = 1'b0;
+                            mode_o.fpu.rnd_mode   = RNE;//TODO:SELECT PROPERLY
+                            mode_o.fpu.masked     = instr_masked;
+                            mode_o.fpu.src_1_narrow = 1'b0;
+                            mode_o.fpu.src_2_narrow = 1'b0;
+                            widenarrow_o          = OP_SINGLEWIDTH;
+                        end
+
+                        {6'b101010, 3'b001},        // vfmsub VV
+                        {6'b101010, 3'b101}: begin  // vfmsub VF
+                            unit_o                = UNIT_FPU;
+                            mode_o.fpu.op         = FMADD;
+                            mode_o.fpu.op_mod     = 1'b1;
+                            mode_o.fpu.op_rev     = 1'b1;
+                            mode_o.fpu.op_reduction = 1'b0;
+                            mode_o.fpu.rnd_mode   = RNE;//TODO:SELECT PROPERLY
+                            mode_o.fpu.masked     = instr_masked;
+                            mode_o.fpu.src_1_narrow = 1'b0;
+                            mode_o.fpu.src_2_narrow = 1'b0;
+                            widenarrow_o          = OP_SINGLEWIDTH;
+                        end
+
+                        {6'b101011, 3'b001},        // vfnmsub VV
+                        {6'b101011, 3'b101}: begin  // vfnmsub VF
+                            unit_o                = UNIT_FPU;
+                            mode_o.fpu.op         = FNMSUB;
+                            mode_o.fpu.op_mod     = 1'b0;
+                            mode_o.fpu.op_rev     = 1'b1;
+                            mode_o.fpu.op_reduction = 1'b0;
+                            mode_o.fpu.rnd_mode   = RNE;//TODO:SELECT PROPERLY
+                            mode_o.fpu.masked     = instr_masked;
+                            mode_o.fpu.src_1_narrow = 1'b0;
+                            mode_o.fpu.src_2_narrow = 1'b0;
+                            widenarrow_o          = OP_SINGLEWIDTH;
+                        end
+
+                        {6'b101100, 3'b001},        // vfmacc VV
+                        {6'b101100, 3'b101}: begin  // vfmacc VF
+                            unit_o                = UNIT_FPU;
+                            mode_o.fpu.op         = FMADD;
+                            mode_o.fpu.op_mod     = 1'b0;
+                            mode_o.fpu.op_rev     = 1'b0;
+                            mode_o.fpu.op_reduction = 1'b0;
+                            mode_o.fpu.rnd_mode   = RNE;//TODO:SELECT PROPERLY
+                            mode_o.fpu.masked     = instr_masked;
+                            mode_o.fpu.src_1_narrow = 1'b0;
+                            mode_o.fpu.src_2_narrow = 1'b0;
+                            widenarrow_o          = OP_SINGLEWIDTH;
+                        end
+
+                        {6'b101101, 3'b001},        // vfnmacc VV
+                        {6'b101101, 3'b101}: begin  // vfnmacc VF
+                            unit_o                = UNIT_FPU;
+                            mode_o.fpu.op         = FNMSUB;
+                            mode_o.fpu.op_mod     = 1'b1;
+                            mode_o.fpu.op_rev     = 1'b0;
+                            mode_o.fpu.op_reduction = 1'b0;
+                            mode_o.fpu.rnd_mode   = RNE;//TODO:SELECT PROPERLY
+                            mode_o.fpu.masked     = instr_masked;
+                            mode_o.fpu.src_1_narrow = 1'b0;
+                            mode_o.fpu.src_2_narrow = 1'b0;
+                            widenarrow_o          = OP_SINGLEWIDTH;
+                        end
+
+                        {6'b101110, 3'b001},        // vfmsac VV
+                        {6'b101110, 3'b101}: begin  // vfmsac VF
+                            unit_o                = UNIT_FPU;
+                            mode_o.fpu.op         = FMADD;
+                            mode_o.fpu.op_mod     = 1'b1;
+                            mode_o.fpu.op_rev     = 1'b0;
+                            mode_o.fpu.op_reduction = 1'b0;
+                            mode_o.fpu.rnd_mode   = RNE;//TODO:SELECT PROPERLY
+                            mode_o.fpu.masked     = instr_masked;
+                            mode_o.fpu.src_1_narrow = 1'b0;
+                            mode_o.fpu.src_2_narrow = 1'b0;
+                            widenarrow_o          = OP_SINGLEWIDTH;
+                        end
+                        {6'b101111, 3'b001},        // vfnmsac VV
+                        {6'b101111, 3'b101}: begin  // vfnmsac VF
+                            unit_o                = UNIT_FPU;
+                            mode_o.fpu.op         = FNMSUB;
+                            mode_o.fpu.op_mod     = 1'b0;
+                            mode_o.fpu.op_rev     = 1'b0;
+                            mode_o.fpu.op_reduction = 1'b0;
+                            mode_o.fpu.rnd_mode   = RNE;//TODO:SELECT PROPERLY
+                            mode_o.fpu.masked     = instr_masked;
+                            mode_o.fpu.src_1_narrow = 1'b0;
+                            mode_o.fpu.src_2_narrow = 1'b0;
+                            widenarrow_o          = OP_SINGLEWIDTH;
+                        end
+
+                        {6'b010010, 3'b001}: begin  // FUNARY0 ENCODING
+                            unit_o                = UNIT_FPU;
+                            mode_o.fpu.op_rev     = 1'b0;
+                            mode_o.fpu.op_reduction = 1'b0;
+                            mode_o.fpu.masked     = instr_masked;
+                            mode_o.fpu.src_1_narrow = 1'b0;
+
+                            rs1_o.vreg   = 1'b0; //rs1 is not a vector register, mark it so it does not cause illegal instruction with attempted reads
+
+                            unique case (instr_vs1) //op determined by vs1 field
+                                5'b00000: begin             //fcvt.xu.f
+                                    mode_o.fpu.op         = F2I;
+                                    mode_o.fpu.op_mod     = 1'b1;
+                                    widenarrow_o          = OP_SINGLEWIDTH;
+                                    mode_o.fpu.src_2_narrow = 1'b0;
+                                    instr_illegal       = 1'b0;
+                                    mode_o.fpu.rnd_mode   = RNE;//TODO: Think this is hard coded
+                                end
+                                5'b00001: begin             //fcvt.x.f
+                                    mode_o.fpu.op         = F2I;
+                                    mode_o.fpu.op_mod     = 1'b0;
+                                    widenarrow_o          = OP_SINGLEWIDTH;
+                                    mode_o.fpu.src_2_narrow = 1'b0;
+                                    instr_illegal       = 1'b0;
+                                    mode_o.fpu.rnd_mode   = RNE;//TODO: Think this is hard coded
+                                end
+                                5'b00010: begin            //fcvt.f.xu
+                                    mode_o.fpu.op         = I2F;
+                                    mode_o.fpu.op_mod     = 1'b1;
+                                    widenarrow_o          = OP_SINGLEWIDTH;
+                                    mode_o.fpu.src_2_narrow = 1'b0;
+                                    instr_illegal       = 1'b0;
+                                    mode_o.fpu.rnd_mode   = RNE;//TODO: Think this is hard coded
+                                end
+                                5'b00011: begin           //fcvt.f.x
+                                    mode_o.fpu.op         = I2F;
+                                    mode_o.fpu.op_mod     = 1'b0;
+                                    widenarrow_o          = OP_SINGLEWIDTH;
+                                    mode_o.fpu.src_2_narrow = 1'b0;
+                                    instr_illegal       = 1'b0;
+                                    mode_o.fpu.rnd_mode   = RNE;//TODO: Think this is hard coded
+                                end
+                                 5'b00110: begin          //fcvt.rtz.xu.f
+                                    mode_o.fpu.op         = F2I;
+                                    mode_o.fpu.op_mod     = 1'b1;
+                                    widenarrow_o          = OP_SINGLEWIDTH;
+                                    mode_o.fpu.src_2_narrow = 1'b0;
+                                    instr_illegal       = 1'b0;
+                                    mode_o.fpu.rnd_mode   = RTZ;//TODO: Think this is hard coded
+                                end
+                                5'b00111: begin            //fcvt.rtz.x.f
+                                    mode_o.fpu.op         = F2I;
+                                    mode_o.fpu.op_mod     = 1'b0;
+                                    widenarrow_o          = OP_SINGLEWIDTH;
+                                    mode_o.fpu.src_2_narrow = 1'b0;
+                                    instr_illegal       = 1'b0;
+                                    mode_o.fpu.rnd_mode   = RTZ;//TODO: Think this is hard coded
+                                end
+
+                                default : begin
+                                    instr_illegal       = 1'b1;
+                                end
+                            endcase
+                                            
+                        end
+
+                        {6'b010011, 3'b001}: begin  // FUNARY1 ENCODING
+
+
+                            unit_o                = UNIT_FPU;
+                            mode_o.fpu.op         = CLASSIFY; //vfclass.v //TODO:condition based on vs1 for selection between FUNARY1 OPS
+                            mode_o.fpu.op_mod     = 1'b0;
+                            mode_o.fpu.op_rev     = 1'b0;
+                            mode_o.fpu.rnd_mode   = RNE;//TODO:SELECT PROPERLY
+                            mode_o.fpu.masked     = instr_masked;
+                            mode_o.fpu.src_1_narrow = 1'b0;
+                            mode_o.fpu.src_2_narrow = 1'b0;
+                            widenarrow_o          = OP_SINGLEWIDTH;
+                           // instr_illegal         = 1'b1;
+                            rs1_o.vreg   = 1'b0; //rs1 is not a vector register, mark it so it does not cause illegal instruction with attempted reads
+                            mode_o.fpu.op_reduction = 1'b0;
+
+                                            
+                        end
+
+                        /////////////////////////////
+                        //These instructions use input data from the FP register file, but use existing HW to perform the operation
+                        /////////////////////////////
+                        {6'b001110, 3'b101}: begin  // vfslide1up VF
+                            unit_o            = UNIT_SLD;
+                            mode_o.sld.dir    = SLD_UP;
+                            mode_o.sld.slide1 = 1'b1;
+                            mode_o.sld.masked = instr_masked;
+                            rd_o.vreg         = 1'b1;
+                        end
+
+                        {6'b001111, 3'b101}: begin  // vfslide1down VF
+                            unit_o            = UNIT_SLD;
+                            mode_o.sld.dir    = SLD_DOWN;
+                            mode_o.sld.slide1 = 1'b1;
+                            mode_o.sld.masked = instr_masked;
+                        end
+
+                        {6'b010111, 3'b101}: begin  // vmv/vmerge VF
+                            unit_o              = UNIT_ALU;
+                            mode_o.alu.opx2.res = instr_masked ? ALU_VSEL : ALU_VSELN;
+                            mode_o.alu.opx1.sel = ALU_SEL_MASK;
+                            mode_o.alu.shift_op = 1'b0;
+                            mode_o.alu.inv_op1  = 1'b1;
+                            mode_o.alu.inv_op2  = 1'b0;
+                            mode_o.alu.sat_res  = 1'b0;
+                            mode_o.alu.op_mask  = instr_masked ? ALU_MASK_SEL : ALU_MASK_NONE;
+                            mode_o.alu.cmp      = 1'b0;
+                            if (~instr_masked) begin
+                                rs2_o.vreg      = 1'b0;
+                            end
+                        end
+
+
+                        /////////////////////////////
+
+
+
+
+                        `ifdef VICUNA_ZVFH_ON 
+                        //These instructions only become defined once SEW16 is defined for FP
+                        {6'b110000, 3'b001},        // vfwadd VV TODO: (might need to upgrade fp_new for this)
+                        {6'b110000, 3'b101}: begin  // vfwadd VF
+                            unit_o                = UNIT_FPU;
+                            mode_o.fpu.op         = ADD;
+                            mode_o.fpu.op_mod     = 1'b0;
+                            mode_o.fpu.op_rev     = 1'b0;
+                            mode_o.fpu.rnd_mode   = RNE;//TODO:SELECT PROPERLY
+                            mode_o.fpu.masked     = instr_masked;
+                            mode_o.fpu.src_1_narrow = 1'b1;
+                            mode_o.fpu.src_2_narrow = 1'b1;
+                            widenarrow_o          = OP_WIDENING;
+                        end
+
+                        {6'b110001, 3'b001}: begin        // vfwredusum VV TODO: LOGIC REQUIRED
+                            unit_o                = UNIT_FPU;
+                            //mode_o.fpu.op         = ;
+                            mode_o.fpu.op_mod     = 1'b0;
+                            mode_o.fpu.op_rev     = 1'b0;
+                            mode_o.fpu.rnd_mode   = RNE;//TODO:SELECT PROPERLY
+                            mode_o.fpu.masked     = instr_masked;
+                            mode_o.fpu.src_1_narrow = 1'b1;
+                            mode_o.fpu.src_2_narrow = 1'b1;
+                            widenarrow_o          = OP_WIDENING;
+                        end
+
+                        {6'b110010, 3'b001},        // vfwsub VV TODO: TEST (might need to upgrade fp_new for this)
+                        {6'b110010, 3'b101}: begin  // vfwsub VF
+                            unit_o                = UNIT_FPU;
+                            mode_o.fpu.op         = ADD;
+                            mode_o.fpu.op_mod     = 1'b1;
+                            mode_o.fpu.op_rev     = 1'b0;
+                            mode_o.fpu.rnd_mode   = RNE;//TODO:SELECT PROPERLY
+                            mode_o.fpu.masked     = instr_masked;
+                            mode_o.fpu.src_1_narrow = 1'b1;
+                            mode_o.fpu.src_2_narrow = 1'b1;
+                            widenarrow_o          = OP_WIDENING;
+                        end
+
+                        {6'b110011, 3'b001}: begin        // vfwredosum VV TODO: LOGIC REQUIRED
+                            unit_o                = UNIT_FPU;
+                            //mode_o.fpu.op         = ;
+                            mode_o.fpu.op_mod     = 1'b0;
+                            mode_o.fpu.op_rev     = 1'b0;
+                            mode_o.fpu.rnd_mode   = RNE;//TODO:SELECT PROPERLY
+                            mode_o.fpu.masked     = instr_masked;
+                            mode_o.fpu.src_1_narrow = 1'b1;
+                            mode_o.fpu.src_2_narrow = 1'b1;
+                            widenarrow_o          = OP_WIDENING;
+                        end
+
+                        {6'b110100, 3'b001},        // vfwadd.w VV TODO: MODIFICATIONS TO FP_NEW REQUIRED
+                        {6'b110100, 3'b101}: begin  // vfwadd.w VF
+                            unit_o                = UNIT_FPU;
+                            mode_o.fpu.op         = ADD;
+                            mode_o.fpu.op_mod     = 1'b1;
+                            mode_o.fpu.op_rev     = 1'b0;
+                            mode_o.fpu.rnd_mode   = RNE;//TODO:SELECT PROPERLY
+                            mode_o.fpu.masked     = instr_masked;
+                            mode_o.fpu.src_1_narrow = 1'b1;
+                            mode_o.fpu.src_2_narrow = 1'b1;
+                            widenarrow_o          = OP_WIDENING;
+                        end
+
+                        {6'b110110, 3'b001},        // vfwsub.w VV TODO: MODIFICATIONS TO FP_NEW REQUIRED
+                        {6'b110110, 3'b101}: begin  // vfwsub.w VF
+                            unit_o                = UNIT_FPU;
+                            mode_o.fpu.op         = ADD;
+                            mode_o.fpu.op_mod     = 1'b1;
+                            mode_o.fpu.op_rev     = 1'b0;
+                            mode_o.fpu.rnd_mode   = RNE;//TODO:SELECT PROPERLY
+                            mode_o.fpu.masked     = instr_masked;
+                            mode_o.fpu.src_1_narrow = 1'b1;
+                            mode_o.fpu.src_2_narrow = 1'b1;
+                            widenarrow_o          = OP_WIDENING;
+                        end
+
+                        {6'b111000, 3'b001},        // vfwmul VV TODO: FINISH/TEST (might need to upgrade fp_new for this)
+                        {6'b111000, 3'b101}: begin  // vfwmul VF
+                            unit_o                = UNIT_FPU;
+                            //mode_o.fpu.op         = ;
+                            mode_o.fpu.op_mod     = 1'b1;
+                            mode_o.fpu.op_rev     = 1'b0;
+                            mode_o.fpu.rnd_mode   = RNE;//TODO:SELECT PROPERLY
+                            mode_o.fpu.masked     = instr_masked;
+                            mode_o.fpu.src_1_narrow = 1'b1;
+                            mode_o.fpu.src_2_narrow = 1'b1;
+                            widenarrow_o          = OP_WIDENING;
+                        end
+
+                        {6'b111100, 3'b001},        // vfwmacc VV TODO: FINISH/TEST(might need to upgrade fp_new for this)
+                        {6'b111100, 3'b101}: begin  // vfwmacc VF
+                            unit_o                = UNIT_FPU;
+                            //mode_o.fpu.op         = ;
+                            mode_o.fpu.op_mod     = 1'b1;
+                            mode_o.fpu.op_rev     = 1'b0;
+                            mode_o.fpu.rnd_mode   = RNE;//TODO:SELECT PROPERLY
+                            mode_o.fpu.masked     = instr_masked;
+                            mode_o.fpu.src_1_narrow = 1'b1;
+                            mode_o.fpu.src_2_narrow = 1'b1;
+                            widenarrow_o          = OP_WIDENING;
+                        end
+
+                        {6'b111101, 3'b001},        // vfwnmacc VV TODO: FINISH/TEST(might need to upgrade fp_new for this)
+                        {6'b111101, 3'b101}: begin  // vfwnmacc VF
+                            unit_o                = UNIT_FPU;
+                            //mode_o.fpu.op         = ;
+                            mode_o.fpu.op_mod     = 1'b1;
+                            mode_o.fpu.op_rev     = 1'b0;
+                            mode_o.fpu.rnd_mode   = RNE;//TODO:SELECT PROPERLY
+                            mode_o.fpu.masked     = instr_masked;
+                            mode_o.fpu.src_1_narrow = 1'b1;
+                            mode_o.fpu.src_2_narrow = 1'b1;
+                            widenarrow_o          = OP_WIDENING;
+                        end
+
+                        {6'b111110, 3'b001},        // vfwmsac VV TODO: FINISH/TEST(might need to upgrade fp_new for this)
+                        {6'b111110, 3'b101}: begin  // vfwmsac VF
+                            unit_o                = UNIT_FPU;
+                            mode_o.fpu.op         = ADD;
+                            mode_o.fpu.op_mod     = 1'b1;
+                            mode_o.fpu.op_rev     = 1'b0;
+                            mode_o.fpu.rnd_mode   = RNE;//TODO:SELECT PROPERLY
+                            mode_o.fpu.masked     = instr_masked;
+                            mode_o.fpu.src_1_narrow = 1'b1;
+                            mode_o.fpu.src_2_narrow = 1'b1;
+                            widenarrow_o          = OP_WIDENING;
+                        end
+
+                        {6'b111111, 3'b001},        // vfwnmsac VV TODO: FINISH/TEST(might need to upgrade fp_new for this)
+                        {6'b111111, 3'b101}: begin  // vfwnmsac VF
+                            unit_o                = UNIT_FPU;
+                            mode_o.fpu.op         = ADD;
+                            mode_o.fpu.op_mod     = 1'b1;
+                            mode_o.fpu.op_rev     = 1'b0;
+                            mode_o.fpu.rnd_mode   = RNE;//TODO:SELECT PROPERLY
+                            mode_o.fpu.masked     = instr_masked;
+                            mode_o.fpu.src_1_narrow = 1'b1;
+                            mode_o.fpu.src_2_narrow = 1'b1;
+                            widenarrow_o          = OP_WIDENING;
+                        end
+
+                        `endif
+                        `endif
+
                         // SLD unit:
                         {6'b001110, 3'b011},        // vslideup VI
                         {6'b001110, 3'b100}: begin  // vslideup VX
@@ -1579,7 +2172,51 @@ module vproc_decoder #(
                 end
                 default: ;
             endcase
+        `ifdef VICUNA_F_ON
 
+        end else if (unit_o == UNIT_FPU) begin
+            
+            if (widenarrow_o == OP_SINGLEWIDTH) begin
+                //Only SEW32 (or SEW16) is supported for FPU instructions
+                unique case (vsew_i)
+                    VSEW_32: vsew_o = VSEW_32;
+                    `ifdef VICUNA_ZVFH_ON
+                    VSEW_16: vsew_o = VSEW_16;
+                    `endif
+                    default: vsew_o = VSEW_INVALID;
+                endcase
+                unique case (lmul_i)
+                    LMUL_F8,
+                    LMUL_F4,
+                    LMUL_F2,
+                    LMUL_1: emul_o = EMUL_1;
+                    LMUL_2: emul_o = EMUL_2;
+                    LMUL_4: emul_o = EMUL_4;
+                    LMUL_8: emul_o = EMUL_8;
+                    default: ;
+                endcase
+                vl_o = vl_i;
+            end else if (widenarrow_o == OP_WIDENING) begin
+
+                unique case (vsew_i)
+                    VSEW_8:  vsew_o = VSEW_16; //Possible if converting from int8 to fp16
+                    VSEW_16: vsew_o = VSEW_32;
+                    default: ;
+                endcase
+                unique case (lmul_i)
+                    LMUL_F8,
+                    LMUL_F4,
+                    LMUL_F2: emul_o = EMUL_1;
+                    LMUL_1:  emul_o = EMUL_2;
+                    LMUL_2:  emul_o = EMUL_4;
+                    LMUL_4:  emul_o = EMUL_8;
+                    LMUL_8:  emul_invalid = 1'b1;
+                    default: ;
+                endcase
+                vl_o = {vl_i[CFG_VL_W-2:0], 1'b1};
+            end
+
+        `endif
         end else begin
 
 
@@ -1601,7 +2238,7 @@ module vproc_decoder #(
                 
 
             end else if (widenarrow_o == OP_WIDENING_EXT2) begin
-                // unlike other widening ops, for [s/v]ext.vf2, eew, emul, and vl are already set correctly     
+                // unlike other widening ops, for [s/z]ext.vf2, eew, emul, and vl are already set correctly     
                 vsew_o = vsew_i;
                 unique case (lmul_i)
                     LMUL_F8,
@@ -1617,7 +2254,7 @@ module vproc_decoder #(
                 
                 
              end else if (widenarrow_o == OP_WIDENING_EXT4) begin
-                // unlike other widening ops, for [s/v]ext.vf4, eew, emul, and vl are already set correctly     
+                // unlike other widening ops, for [s/z]ext.vf4, eew, emul, and vl are already set correctly     
                 vsew_o = vsew_i;
                 unique case (lmul_i)
                     LMUL_F8,
@@ -1783,6 +2420,17 @@ module vproc_decoder #(
             endcase
         end
 
+        if (unit_o == UNIT_FPU) begin
+            if (mode_o.fpu.op_reduction) begin
+                // all FPU reduction instructions read the init value from vs1,
+                // which is a single vreg rather than a vreg group, and
+                // also write to a single vreg rather than a vreg group
+                vs1_invalid = 1'b0;
+                vd_invalid  = 1'b0;
+            end
+
+        end
+
         // register addresses are always valid if it is not a vector register:
         if (~rs1_o.vreg) begin
             vs1_invalid = 1'b0;
@@ -1796,7 +2444,14 @@ module vproc_decoder #(
     end
 
     logic vtype_invalid;
-    assign vtype_invalid = vsew_i == VSEW_INVALID;
+
+    `ifdef VICUNA_F_ON
+        //Only SEW32 (or possibly SEW16) allowed for f types, add extra check because vsew_i can be valid but vsew_o could be not supported
+        assign vtype_invalid = (vsew_i == VSEW_INVALID) | (vsew_o == VSEW_INVALID);
+    `else
+        assign vtype_invalid = vsew_i == VSEW_INVALID;
+    `endif
+    
 
     // operation illegal (invalid vtype, invalid EMUL, or register addresses for the current configuration)
     logic op_illegal;

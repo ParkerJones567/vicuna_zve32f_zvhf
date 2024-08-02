@@ -736,7 +736,7 @@ module vproc_pipeline import vproc_pkg::*; #(
         unpack_ctrl.vl_part_0    = (state_q.count.val[COUNTER_W-2:$clog2(MAX_OP_W/COUNTER_OP_W)] >  state_q.vl[CFG_VL_W-1:$clog2(MAX_OP_W/8)]) |  state_q.vl_0;
         unpack_ctrl.last_vl_part = (state_q.count.val[COUNTER_W-2:$clog2(MAX_OP_W/COUNTER_OP_W)] == state_q.vl[CFG_VL_W-1:$clog2(MAX_OP_W/8)]) & ~state_q.vl_0;
         if ((UNITS[UNIT_LSU ] & (state_q.unit == UNIT_LSU ) & (state_q.mode.lsu.stride != LSU_UNITSTRIDE)) |
-            (UNITS[UNIT_ELEM] & (state_q.unit == UNIT_ELEM))
+            (UNITS[UNIT_ELEM] & (state_q.unit == UNIT_ELEM)) | (UNITS[UNIT_FPU] & (state_q.unit == UNIT_FPU))
         ) begin
             unpack_ctrl.vl_part_0 = (state_q.count.val[COUNTER_W-2:0] >  state_q.vl[CFG_VL_W-1:$clog2(COUNTER_OP_W/8)]) |  state_q.vl_0;
         end
@@ -759,11 +759,31 @@ module vproc_pipeline import vproc_pkg::*; #(
         unpack_ctrl.res_vaddr  = state_q.res_vaddr;
         for (int i = 0; i < RES_CNT; i++) begin
             if ((state_q.unit != UNIT_ELEM) & ~RES_MASK[i] & (RES_ALWAYS_VREG[i] | state_q.res_vreg[i])) begin
-                if (RES_NARROW[i] & state_q.res_narrow[i]) begin
+
+                //Need to handle the unique case where FPU acts as ELEMENTWISE
+                if (state_q.unit != UNIT_FPU) begin
+
+                    if (RES_NARROW[i] & state_q.res_narrow[i]) begin
                     unpack_ctrl.res_vaddr[1:0] = state_q.res_vaddr[1:0] | state_q.count.part.mul[2:1];
+                    end else begin
+                        unpack_ctrl.res_vaddr[2:0] = state_q.res_vaddr[2:0] | state_q.count.part.mul;
+                    end
+
                 end else begin
-                    unpack_ctrl.res_vaddr[2:0] = state_q.res_vaddr[2:0] | state_q.count.part.mul;
+                    //Must confirm current unit is FPU before checking the op_reduction bit
+                    if (state_q.mode.fpu.op_reduction != 1'b1) begin
+
+                        if (RES_NARROW[i] & state_q.res_narrow[i]) begin
+                            unpack_ctrl.res_vaddr[1:0] = state_q.res_vaddr[1:0] | state_q.count.part.mul[2:1];
+                        end else begin
+                            unpack_ctrl.res_vaddr[2:0] = state_q.res_vaddr[2:0] | state_q.count.part.mul;
+                        end
+
+                    end
+
+
                 end
+
             end
         end
 
