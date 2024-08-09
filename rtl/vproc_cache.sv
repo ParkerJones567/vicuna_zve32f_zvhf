@@ -239,7 +239,7 @@ module vproc_cache #(
                     mem_req_cnt_d.val = mem_req_cnt_q.val + 1;
 
                     // start refilling once the spill is done
-                    if (mem_req_cnt_d.part.done) begin
+                    if (mem_req_cnt_d.part.done) begin 
                         mem_req_cnt_d.val  = '0;
                         mem_data_cnt_d.val = '0;
                     end
@@ -276,7 +276,7 @@ module vproc_cache #(
     assign cpu_addr.addr = cpu_addr_i;
 
     // Cache way interface signals
-    assign way_rindex     = mem_data_cnt_q.part.done ? cpu_addr.part.index : cpu_addr_q.part.index;
+    assign way_rindex     = mem_data_cnt_q.part.done ? cpu_addr_d.part.index : cpu_addr_q.part.index;
     assign way_windex     = cpu_addr_q.part.index;
     assign way0_we        = mem_data_cnt_q.part.done ? (check_tag_q & tag_match_way0 & cpu_we_q) : ~lru_q[cpu_addr_q.part.index];
     assign way1_we        = mem_data_cnt_q.part.done ? (check_tag_q & tag_match_way1 & cpu_we_q) :  lru_q[cpu_addr_q.part.index];
