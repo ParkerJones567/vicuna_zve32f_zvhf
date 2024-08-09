@@ -201,17 +201,22 @@ int main(int argc, char **argv) {
                 
             int cycles = 0;
             
+            bool main_reached = false;
+            
             while (end_cnt < extra_cycles) {
                 //fprintf(stderr, "Cycle Simulated()\n");
                 // if ABORT_CYCLES is defined, then it specifies the number of cycles after which
                 // simulation is aborted in case there is no activity on the memory interface
 #ifdef ABORT_CYCLES
+                
                 if (abort_cnt >= ABORT_CYCLES) {
                     fprintf(stderr, "WARNING: memory interface inactive for %d cycles, "
                                     "aborting simulation\n", ABORT_CYCLES);
                     exit_code = 1;
                     break;
                 }
+                
+                
 #endif
 
                 // read memory request
@@ -271,17 +276,33 @@ int main(int argc, char **argv) {
                 top->clk_i = 0;
                 top->eval();
                 
-                cycles++;
+                
+                
+                main_reached = (addr == 0x00002000u) | main_reached;  //Vicuna Linker always puts MAIN at addr 2000.  Wait to check for a stall/abort until this has passed.
+                
+                if ( addr == 0x00000078u  && main_reached) {
+                
+                   fprintf(stderr, "ERROR: TEST FAILURE\n");
+                   exit_code = 1;
+                   break;
+                 }
 
-                if (csv_out == 1) {
-                // log data
+                if (csv_out == 1 && main_reached) {
+                // log data once main has been reached
                     log_cycle(top, tfp, fcsv);
                 }
 
-                if (end_cnt > 0 || (top->mem_req_o == 1 && top->mem_addr_o == 0)) {
+                
+                if (end_cnt > 0 || (top->mem_req_o == 1 && addr == 0x0000007Cu)) {
                     end_cnt++;
                 }
-                abort_cnt = (top->mem_req_o == mem_req_o_tmp) ? abort_cnt + 1 : 0;
+                
+                
+                
+                if(main_reached) {
+                    cycles++;
+                    abort_cnt = (top->mem_req_o == mem_req_o_tmp) ? abort_cnt + 1 : 0;
+                }
             }
             
             fprintf(stderr, "Total Cycles: `%d'\n", cycles - extra_cycles);
