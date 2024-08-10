@@ -105,9 +105,6 @@ module vproc_top import vproc_pkg::*; #(
     };
 
 
-
-    ///////////////////////// END DEDICATED SECTION FOR VPROC
-
 `ifdef MAIN_CORE_IBEX
     localparam bit USE_XIF_MEM = '0;
 
@@ -308,7 +305,6 @@ module vproc_top import vproc_pkg::*; #(
         .fetch_enable_i      ( 1'b1          ),
         .core_sleep_o        (               )
     );
-
 
     `ifndef SCALAR_FPU_ON
     //CONNECTING VPROC_XIF to HOST_XIF.
@@ -664,15 +660,45 @@ module vproc_top import vproc_pkg::*; #(
     assign host_xif.issue_resp.dualwrite = fpu_ss_xif.issue_resp.dualwrite | vcore_xif.issue_resp.dualwrite;      
     assign host_xif.issue_resp.dualread  = fpu_ss_xif.issue_resp.dualread | vcore_xif.issue_resp.dualread;       
     assign host_xif.issue_resp.loadstore = fpu_ss_xif.issue_resp.loadstore | vcore_xif.issue_resp.loadstore;      
-    assign host_xif.issue_resp.exc       = fpu_ss_xif.issue_resp.exc | vcore_xif.issue_resp.exc;            
+    assign host_xif.issue_resp.exc       = fpu_ss_xif.issue_resp.exc | vcore_xif.issue_resp.exc;   
 
-    assign fpu_ss_xif.commit_valid       = host_xif.commit_valid;            //Broadcast from host
-    assign vcore_xif.commit_valid       = host_xif.commit_valid;            //Broadcast from host
-    assign fpu_ss_xif.commit.id          = host_xif.commit.id;               //Broadcast from host
-    assign vcore_xif.commit.id          = host_xif.commit.id;               //Broadcast from host
-    assign fpu_ss_xif.commit.commit_kill = host_xif.commit.commit_kill;      //Broadcast from host
-    assign vcore_xif.commit.commit_kill = host_xif.commit.commit_kill;      //Broadcast from host  
+    //Commit Interface: cannot broadcast commit valid, only send to unit that accepted the request
+    logic [15:0] coproc_issued_d;
+    logic [15:0] coproc_issued_q;
+    always_ff @(posedge clk_i) begin
+        if(~rst_ni) begin
+            coproc_issued_q <= '0;    
+        end else begin
+            coproc_issued_q <= coproc_issued_d;
+        end
+    end  
+    always_comb begin
+        coproc_issued_d = coproc_issued_q;
+        //if vproc accepts, write 0.  if fpu_ss accepts, write 1
+        if (vcore_xif.issue_resp.accept & host_xif.issue_valid) begin
+            coproc_issued_d[host_xif.issue_req.id] = 1'b0; 
+        end else if (fpu_ss_xif.issue_resp.accept & host_xif.issue_valid) begin
+            coproc_issued_d[host_xif.issue_req.id] = 1'b1;
+        end
 
+        //Commit signal is only sent to the unit that accepted the request
+        if (coproc_issued_q[host_xif.commit.id]) begin
+            fpu_ss_xif.commit_valid = host_xif.commit_valid;            
+            fpu_ss_xif.commit.id    = host_xif.commit.id;               
+            fpu_ss_xif.commit.commit_kill = host_xif.commit.commit_kill; 
+            vcore_xif.commit_valid = 1'b0;  
+            vcore_xif.commit.id    = '0;   
+            vcore_xif.commit.commit_kill = 1'b0;
+        end else begin
+            vcore_xif.commit_valid = host_xif.commit_valid;            
+            vcore_xif.commit.id    = host_xif.commit.id;               
+            vcore_xif.commit.commit_kill = host_xif.commit.commit_kill;  
+            fpu_ss_xif.commit_valid = 1'b0;   
+            fpu_ss_xif.commit.id    = '0;
+            fpu_ss_xif.commit.commit_kill = 1'b0; 
+        end
+
+    end     
 
     assign host_xif.result_valid   = fpu_ss_xif.result_valid | vcore_xif.result_valid;                    // Arbitrate: Valid when either unit has valid data.  Core will be waiting for one result at a time
     assign fpu_ss_xif.result_ready = host_xif.result_ready;                 //Broadcast from host
