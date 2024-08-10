@@ -7,6 +7,12 @@
 #include <stdint.h>
 #include <errno.h>
 #include "Vvproc_top.h"
+
+#include "Vvproc_top_vproc_top.h"
+#include "Vvproc_top_cv32e40x_core__pi1.h"
+
+
+
 #include "verilated.h"
 
 #ifdef TRACE_VCD
@@ -201,7 +207,13 @@ int main(int argc, char **argv) {
                 
             int cycles = 0;
             
-            bool main_reached = false;
+            bool main_reached = true;
+            
+            int current_IF_PC = 0;
+            int last_IF_PC = 0;
+            int cycles_stalled = 0;
+           
+            int  cycles_begin_trace = 0;  //Trace begins at this cycle count.  TODO: expose to the command line
             
             while (end_cnt < extra_cycles) {
                 //fprintf(stderr, "Cycle Simulated()\n");
@@ -218,6 +230,8 @@ int main(int argc, char **argv) {
                 
                 
 #endif
+                //update last IF_PC
+                last_IF_PC = current_IF_PC;
 
                 // read memory request
                 bool     valid = top->mem_addr_o < mem_sz;
@@ -278,17 +292,20 @@ int main(int argc, char **argv) {
                 
                 
                 
-                main_reached = (addr == 0x00002000u) | main_reached;  //Vicuna Linker always puts MAIN at addr 2000.  Wait to check for a stall/abort until this has passed.
+                main_reached = (addr == 0x00002000u) | main_reached;  //Vicuna Linker always puts MAIN (or run_test) at addr 2000.  Wait to check for a stall/abort until this has passed.
                 
+                //A jump to address 0x78 is a failed test
                 if ( addr == 0x00000078u  && main_reached) {
                 
-                   fprintf(stderr, "ERROR: TEST FAILURE\n");
+                   fprintf(stderr, "ERROR: TEST FAILURE - Interrupt handler reached\n");
                    exit_code = 1;
                    break;
                  }
 
-                if (csv_out == 1 && main_reached) {
-                // log data once main has been reached
+
+
+                if (csv_out == 1 && main_reached && cycles > cycles_begin_trace) {
+                // log data once main has been reached and desired start point has been reached
                     log_cycle(top, tfp, fcsv);
                 }
 
@@ -303,6 +320,22 @@ int main(int argc, char **argv) {
                     cycles++;
                     abort_cnt = (top->mem_req_o == mem_req_o_tmp) ? abort_cnt + 1 : 0;
                 }
+                
+                //After 100 cycles at the same fetch PC, exit
+                current_IF_PC = top->vproc_top->core->pc_if;
+                if(current_IF_PC == last_IF_PC){
+                    cycles_stalled++; 
+                } else{
+                    cycles_stalled = 0;
+                }
+                
+                if(cycles_stalled >= 100) {
+                    fprintf(stderr, "ERROR: SIMULATION STALLED AT IF_PC = 0x%x\n", current_IF_PC);
+                    exit_code = 1;
+                    break;
+                }
+                
+                
             }
             
             fprintf(stderr, "Total Cycles: `%d'\n", cycles - extra_cycles);
