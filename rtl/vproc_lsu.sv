@@ -187,9 +187,9 @@ module vproc_lsu import vproc_pkg::*; #(
     // Stall vreg writes until pending reads of the destination register are
     // complete and while the instruction is speculative; for the LSU stalling
     // has to happen at the request stage, since later stalling is not possible
+    // Also stall if incoming instruction is speculative OR a current instruction has not finished
     assign state_req_stall = (~state_req_q.mode.lsu.store & state_req_q.res_store & vreg_pend_rd_i[state_req_q.res_vaddr]) |
-                             (instr_state_i[state_req_q.id] == INSTR_SPECULATIVE) | ~lsu_queue_ready;
-
+                             ((instr_state_i[state_req_q.id] == INSTR_SPECULATIVE) | ~(state_req_q.id == deq_state.id)) | ~lsu_queue_ready;
 
     ///////////////////////////////////////////////////////////////////////////
     // LSU READ/WRITE
@@ -283,7 +283,7 @@ module vproc_lsu import vproc_pkg::*; #(
     // that could be tricky because the LSU cannot accept a memory response transaction while
     // dequeueing a suppressed request
     logic req_suppress;
-    assign req_suppress = (instr_state_i[state_req_q.id] == INSTR_KILLED) | state_req_q.vl_part_0;
+    assign req_suppress = (instr_state_i[state_req_q.id] == INSTR_KILLED) | state_req_q.vl_part_0; 
 
     // memory request (keep requesting next access while addressing is not complete)
     assign xif_mem_if.mem_valid     = state_req_valid_q & ~req_suppress & ~state_req_stall & (~mem_exc_q | state_req_q.first_cycle);
@@ -351,6 +351,7 @@ module vproc_lsu import vproc_pkg::*; #(
     assign xif_mem_result_id_valid = xif_memres_if.mem_result_valid &
                                     (xif_memres_if.mem_result.id == deq_state.id) & !deq_state.suppressed;
 
+
     assign deq_ready           = xif_mem_result_id_valid | deq_state.suppressed | mem_err_d;
     assign state_rdata_valid_d = deq_valid & deq_ready;
 
@@ -373,6 +374,7 @@ module vproc_lsu import vproc_pkg::*; #(
     logic trans_complete_valid, trans_complete_ready;
     assign trans_complete_valid = deq_valid & deq_ready & deq_state.last_cycle &
                                   (instr_state_i[deq_state.id] == INSTR_COMMITTED);
+
     vproc_queue #(
         .WIDTH        ( XIF_ID_W + 7                                                          ),
         .DEPTH        ( 2                                                                     )
