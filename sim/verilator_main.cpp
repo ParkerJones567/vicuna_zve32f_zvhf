@@ -207,7 +207,7 @@ int main(int argc, char **argv) {
                 
             int cycles = 0;
             
-            bool main_reached = true;
+            bool main_reached = false;
             
             int current_IF_PC = 0;
             int last_IF_PC = 0;
@@ -292,12 +292,23 @@ int main(int argc, char **argv) {
                 
                 
                 
-                main_reached = (addr == 0x00002000u) | main_reached;  //Vicuna Linker always puts MAIN (or run_test) at addr 2000.  Wait to check for a stall/abort until this has passed.
+                main_reached = (current_IF_PC == 0x00002000u) | main_reached;  //Vicuna Linker always puts MAIN (or run_test) at addr 2000.  Wait to check for a stall/abort until this has passed.
                 
-                //A jump to address 0x78 is a failed test
-                if ( addr == 0x00000078u  && main_reached) {
+                //Need to use PC to exit/abort due to I cache
+                current_IF_PC = top->vproc_top->core->pc_if;
+                //A jump to address 0x74 is a failed test caused by an interrupt being called (all other interrupts also funnel here)
+                if ( current_IF_PC == 0x00000074u ) {
                 
-                   fprintf(stderr, "ERROR: TEST FAILURE - Interrupt handler reached\n");
+                   fprintf(stderr, "ERROR: TEST FAILURE - Interrupt Called\n");
+                   exit_code = 1;
+                   break;
+                 }
+                
+                
+                //A jump to address 0x78 is a failed test caused by mismatched output
+                if ( current_IF_PC == 0x00000078u ) {
+                
+                   fprintf(stderr, "ERROR: TEST FAILURE - Output Mismatch\n");
                    exit_code = 1;
                    break;
                  }
@@ -310,8 +321,9 @@ int main(int argc, char **argv) {
                 }
 
                 
-                if (end_cnt > 0 || (top->mem_req_o == 1 && addr == 0x0000007Cu)) {
+                if (end_cnt > 0 || (top->mem_req_o == 1 && current_IF_PC == 0x0000007Cu)) {
                     end_cnt++;
+                    fprintf(stderr, "SUCCESS: TEST PASS - Output Match\n");
                 }
                 
                 
@@ -321,16 +333,15 @@ int main(int argc, char **argv) {
                     abort_cnt = (top->mem_req_o == mem_req_o_tmp) ? abort_cnt + 1 : 0;
                 }
                 
-                //After 100 cycles at the same fetch PC, exit
-                current_IF_PC = top->vproc_top->core->pc_if;
+                //After 10000 cycles at the same fetch PC, exit
                 if(current_IF_PC == last_IF_PC){
                     cycles_stalled++; 
                 } else{
                     cycles_stalled = 0;
                 }
                 
-                if(cycles_stalled >= 100) {
-                    fprintf(stderr, "ERROR: SIMULATION STALLED AT IF_PC = 0x%x\n", current_IF_PC);
+                if(cycles_stalled >= 10000) {
+                    fprintf(stderr, "ERROR: SIMULATION STALLED FOR 10000 CYCLES AT IF_PC = 0x%x\n", current_IF_PC);
                     exit_code = 1;
                     break;
                 }
