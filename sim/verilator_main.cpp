@@ -10,6 +10,7 @@
 
 #include "Vvproc_top_vproc_top.h"
 #include "Vvproc_top_cv32e40x_core__pi1.h"
+#include "Vvproc_top_cv32e40x_wb_stage__Xz11.h"
 
 
 
@@ -212,6 +213,8 @@ int main(int argc, char **argv) {
             int current_IF_PC = 0;
             int last_IF_PC = 0;
             int cycles_stalled = 0;
+            
+            int cycles_stalled_XIF = 0;
            
             int  cycles_begin_trace = 0;  //Trace begins at this cycle count.  TODO: expose to the command line
             
@@ -346,10 +349,18 @@ int main(int argc, char **argv) {
                     break;
                 }
                 
+                //Check to see if CV32 is waiting for the XIF interface
+                bool xif_stall = top->vproc_top->core->wb_stage_i->xif_waiting;
+                if(xif_stall && main_reached)
+                {
+                    cycles_stalled_XIF++;
+                }
+                
                 
             }
             
             fprintf(stderr, "Total Cycles: `%d'\n", cycles - extra_cycles);
+            fprintf(stderr, "Cycles Stalled on XIF interface: `%d'\n", cycles_stalled_XIF);
             
         }
 
