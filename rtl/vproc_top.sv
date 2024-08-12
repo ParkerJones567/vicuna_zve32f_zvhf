@@ -305,7 +305,7 @@ module vproc_top import vproc_pkg::*; #(
         .fetch_enable_i      ( 1'b1          ),
         .core_sleep_o        (               )
     );
-
+    
     `ifndef SCALAR_FPU_ON
     //CONNECTING VPROC_XIF to HOST_XIF.
     assign vcore_xif.issue_valid         = host_xif.issue_valid;           
@@ -782,6 +782,30 @@ module vproc_top import vproc_pkg::*; #(
         assign vcore_xif.mem_result.err   = host_xif.mem_result.err;        //Broadcast from host
         assign fpu_ss_xif.mem_result.dbg   = host_xif.mem_result.dbg;        //Broadcast from host
         assign vcore_xif.mem_result.dbg   = host_xif.mem_result.dbg;        //Broadcast from host
+
+    end else begin
+
+        //If Vicuna is not on the XIF interface, just connect FPU_SS
+        assign host_xif.mem_valid          = fpu_ss_xif.mem_valid;
+        assign fpu_ss_xif.mem_ready        = host_xif.mem_ready;             
+        assign host_xif.mem_req.id         = fpu_ss_xif.mem_req.id;          
+        assign host_xif.mem_req.addr       = fpu_ss_xif.mem_req.addr;        
+        assign host_xif.mem_req.mode       = fpu_ss_xif.mem_req.mode;        
+        assign host_xif.mem_req.we         = fpu_ss_xif.mem_req.we;          
+        assign host_xif.mem_req.size       = fpu_ss_xif.mem_req.size;        
+        assign host_xif.mem_req.be         = fpu_ss_xif.mem_req.be;          
+        assign host_xif.mem_req.attr       = fpu_ss_xif.mem_req.attr;        
+        assign host_xif.mem_req.wdata      = fpu_ss_xif.mem_req.wdata;       
+        assign host_xif.mem_req.last       = fpu_ss_xif.mem_req.last;        
+        assign host_xif.mem_req.spec       = fpu_ss_xif.mem_req.spec;        
+        assign fpu_ss_xif.mem_resp.exc     = host_xif.mem_resp.exc;          
+        assign fpu_ss_xif.mem_resp.exccode = host_xif.mem_resp.exccode;      
+        assign fpu_ss_xif.mem_resp.dbg     = host_xif.mem_resp.dbg;          
+        assign fpu_ss_xif.mem_result_valid = host_xif.mem_result_valid;      
+        assign fpu_ss_xif.mem_result.id    = host_xif.mem_result.id;         
+        assign fpu_ss_xif.mem_result.rdata = host_xif.mem_result.rdata;      
+        assign fpu_ss_xif.mem_result.err   = host_xif.mem_result.err;        
+        assign fpu_ss_xif.mem_result.dbg   = host_xif.mem_result.dbg;   
 
     end
 
