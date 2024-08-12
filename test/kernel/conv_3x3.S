@@ -164,7 +164,7 @@ conv3x3:
     add             a0, a0, t3
     blt             a1, a4, .L0
 
-    jr              x0
+    j               spill_cache
 
     .data
     .align 10

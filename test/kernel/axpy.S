@@ -107,7 +107,7 @@ abort3:
     vse8.v          v28, (t2)
 
 end:
-    jr              x0
+    j               spill_cache
 
     .data
     .align 10

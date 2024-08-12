@@ -183,7 +183,7 @@ end_rows:
     # Not done.
 
 exit:
-    jr              x0
+    j               spill_cache
 
     .data
     .align 10
