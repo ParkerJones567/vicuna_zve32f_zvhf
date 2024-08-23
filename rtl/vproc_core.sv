@@ -298,6 +298,7 @@ module vproc_core import vproc_pkg::*; #(
     op_unit instr_unit;
     op_mode instr_mode;
     vproc_decoder #(
+        .VREG_W             ( VREG_W                              ),
         .CFG_VL_W           ( CFG_VL_W                            ),
         .XIF_MEM_W          ( XIF_MEM_W                           ),
         .ALIGNED_UNITSTRIDE ( VLSU_FLAGS[VLSU_ALIGNED_UNITSTRIDE] ),
@@ -749,10 +750,14 @@ module vproc_core import vproc_pkg::*; #(
 
     // potential vector register hazards of the currently dequeued instruction
     vproc_pending_wr #(
+        .CFG_VL_W       ( CFG_VL_W                ),
+        .VREG_W         ( VREG_W                  ),
         .DONT_CARE_ZERO ( DONT_CARE_ZERO          )
+        
     ) queue_pending_wr (
         .vsew_i         ( queue_data_d.vsew       ),
         .emul_i         ( queue_data_d.emul       ),
+        .vl_i           ( queue_data_d.vl         ),
         .unit_i         ( queue_data_d.unit       ),
         .mode_i         ( queue_data_d.mode       ),
         .widenarrow_i   ( queue_data_d.widenarrow ),

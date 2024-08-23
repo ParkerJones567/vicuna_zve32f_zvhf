@@ -4,6 +4,7 @@
 
 
 module vproc_decoder #(
+        parameter int unsigned          VREG_W             = 128,
         parameter int unsigned          CFG_VL_W           = 7,    // width of VL CSR register
         parameter int unsigned          XIF_MEM_W          = 0,    // width of XIF mem iface
         parameter bit                   ALIGNED_UNITSTRIDE = 1'b0, // aligned unit-stride only
@@ -47,7 +48,8 @@ module vproc_decoder #(
 
     logic      instr_illegal;
     logic      emul_override;
-    cfg_emul   emul;
+    cfg_emul   emul;             //emul for EMUL override
+    logic [CFG_VL_W-1:0]     vl; //vector length for EMUL override
     evl_policy evl_pol;
 
 
@@ -212,13 +214,35 @@ module vproc_decoder #(
                                 instr_illegal = instr_i[6:0] == 7'h27; // illegal for stores
                             end
                             5'b01000: begin // whole register load/store
-                                emul_override = 1'b1;
-                                evl_pol       = EVL_MAX;
+                                emul_override = 1'b1; //TODO: PROBABLY NEEDS SAME TREATMENT AS VMV4R -CHANGE NOT VERIFIED
+                                `ifdef OLD_VICUNA
+                                evl_pol             = EVL_MAX;
+                                `endif
                                 unique case (instr_i[31:29])
-                                    3'b000: emul = EMUL_1;
-                                    3'b001: emul = EMUL_2;
-                                    3'b011: emul = EMUL_4;
-                                    3'b111: emul = EMUL_8;
+                                    5'b00000: begin
+                                                emul = EMUL_1;
+                                                `ifndef OLD_VICUNA
+                                                vl = (VREG_W/8)-1;
+                                                `endif
+                                            end
+                                    5'b00001: begin
+                                                emul = EMUL_2;
+                                                `ifndef OLD_VICUNA
+                                                vl = (2*VREG_W/8)-1;
+                                                `endif
+                                            end
+                                    5'b00011: begin
+                                                emul = EMUL_4;
+                                                `ifndef OLD_VICUNA
+                                                vl = (4*VREG_W/8)-1;
+                                                `endif
+                                            end
+                                    5'b00111: begin
+                                                emul = EMUL_8;
+                                                `ifndef OLD_VICUNA
+                                                vl = (8*VREG_W/8)-1;
+                                                `endif
+                                            end
                                     default: instr_illegal = 1'b1;
                                 endcase
                                 mode_o.lsu.nfields = '0;
@@ -1106,13 +1130,37 @@ module vproc_decoder #(
                             mode_o.alu.sat_res  = 1'b0;
                             mode_o.alu.op_mask  = ALU_MASK_NONE;
                             mode_o.alu.cmp      = 1'b0;
+                            //Changes to control flow to improve performance.  Introduces timing anomalies
+                            //Need to now specific the actual vector length of these instructions, as they are now used to determine when to stop
+                            `ifdef OLD_VICUNA
                             evl_pol             = EVL_MAX;
+                            `endif
                             emul_override       = 1'b1;
                             unique case (instr_vs1)
-                                5'b00000: emul = EMUL_1;
-                                5'b00001: emul = EMUL_2;
-                                5'b00011: emul = EMUL_4;
-                                5'b00111: emul = EMUL_8;
+                                5'b00000: begin
+                                            emul = EMUL_1;
+                                            `ifndef OLD_VICUNA
+                                            vl = (VREG_W/8)-1;
+                                            `endif
+                                          end
+                                5'b00001: begin
+                                            emul = EMUL_2;
+                                            `ifndef OLD_VICUNA
+                                            vl = (2*VREG_W/8)-1;
+                                            `endif
+                                          end
+                                5'b00011: begin
+                                            emul = EMUL_4;
+                                            `ifndef OLD_VICUNA
+                                            vl = (4*VREG_W/8)-1;
+                                            `endif
+                                          end
+                                5'b00111: begin
+                                            emul = EMUL_8;
+                                            `ifndef OLD_VICUNA
+                                            vl = (8*VREG_W/8)-1;
+                                            `endif
+                                          end
                                 default: instr_illegal = 1'b1;
                             endcase
                         end
@@ -2037,7 +2085,12 @@ module vproc_decoder #(
                         {6'b010000, 3'b010}: begin  // VWXUNARY0
                             unit_o = UNIT_ELEM;
                             unique case (instr_i[19:15])
-                                5'b00000: mode_o.elem.op = ELEM_XMV;    // vmv.x.s
+                                5'b00000: begin
+                                            mode_o.elem.op = ELEM_XMV;    // vmv.x.s
+                                            `ifndef OLD_VICUNA
+                                            evl_pol             = EVL_1;
+                                            `endif
+                                        end
                                 5'b10000: mode_o.elem.op = ELEM_VPOPC;  // vpopc
                                 5'b10001: mode_o.elem.op = ELEM_VFIRST; // vfirst
                                 default:  instr_illegal  = 1'b1;
@@ -2100,7 +2153,7 @@ module vproc_decoder #(
         vl_o         = DONT_CARE_ZERO ? '0 : 'x;
         emul_invalid = 1'b0;
 
-        if (unit_o == UNIT_LSU) begin
+         if (unit_o == UNIT_LSU) begin
 
             unique case ({mode_o.lsu.eew, vsew_i})
                 {VSEW_8 , VSEW_32}: begin   // EEW / SEW = 1 / 4
@@ -2295,7 +2348,11 @@ module vproc_decoder #(
 
         if (emul_override) begin
             emul_o = emul;
+            `ifndef OLD_VICUNA
+            vl_o   = vl;
+            `endif
         end
+
         unique case (evl_pol)
             EVL_1: begin
                 emul_o = EMUL_1;

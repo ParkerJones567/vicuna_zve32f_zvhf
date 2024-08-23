@@ -123,6 +123,7 @@ module vproc_unit_wrapper import vproc_pkg::*; #(
                 pipe_out_res_valid_o[0]                 = pipe_out_valid_o;
                 pipe_out_res_data_o [0]                 = unit_out_res;
                 pipe_out_res_mask_o [0][MAX_OP_W/8-1:0] = unit_out_mask;
+                pipe_out_res_flags_o[0].vreg_idx        = unit_out_ctrl.vreg_idx;
             end
             assign pipe_out_pend_clear_cnt_o = '0;
             assign pipe_out_instr_done_o     = unit_out_ctrl.last_cycle;
@@ -171,8 +172,10 @@ module vproc_unit_wrapper import vproc_pkg::*; #(
                 pipe_out_res_valid_o[0]                 = pipe_out_valid_o;
                 pipe_out_res_data_o [0]                 = unit_out_res_alu;
                 pipe_out_res_mask_o [0][MAX_OP_W/8-1:0] = unit_out_mask;
+                pipe_out_res_flags_o[0].vreg_idx        = unit_out_ctrl.vreg_idx;
 
                 pipe_out_res_flags_o[1].mul_idx         = unit_out_ctrl.count_mul;
+                pipe_out_res_flags_o[1].vreg_idx        = unit_out_ctrl.vreg_idx;
                 pipe_out_res_store_o[1]                 = unit_out_ctrl.res_store & unit_out_ctrl.mode.alu.cmp;
                 pipe_out_res_valid_o[1]                 = pipe_out_valid_o;
                 pipe_out_res_data_o [1][MAX_OP_W/8-1:0] = unit_out_res_cmp;
@@ -222,6 +225,7 @@ module vproc_unit_wrapper import vproc_pkg::*; #(
                 pipe_out_res_valid_o[0]                 = pipe_out_valid_o;
                 pipe_out_res_data_o [0]                 = unit_out_res;
                 pipe_out_res_mask_o [0][MAX_OP_W/8-1:0] = unit_out_mask;
+                pipe_out_res_flags_o[0].vreg_idx        = unit_out_ctrl.vreg_idx;
             end
             assign pipe_out_pend_clear_o     = unit_out_ctrl.res_store;
             assign pipe_out_pend_clear_cnt_o = '0;
@@ -264,6 +268,7 @@ module vproc_unit_wrapper import vproc_pkg::*; #(
                 pipe_out_res_valid_o[0]                 = pipe_out_valid_o;
                 pipe_out_res_data_o [0]                 = unit_out_res;
                 pipe_out_res_mask_o [0][MAX_OP_W/8-1:0] = unit_out_mask;
+                pipe_out_res_flags_o[0].vreg_idx        = unit_out_ctrl.vreg_idx;
             end
             assign pipe_out_pend_clear_o     = unit_out_ctrl.res_store;
             assign pipe_out_pend_clear_cnt_o = '0;
@@ -442,6 +447,7 @@ module vproc_unit_wrapper import vproc_pkg::*; #(
                 pipe_out_res_data_o  = '0;
                 pipe_out_res_mask_o  = '0;
                 pipe_out_res_flags_o[0].shift = DONT_CARE_ZERO ? '0 : 'x;
+                pipe_out_res_flags_o[0].vreg_idx        = '0; //output of ELEM unit is always at position 0
                 unique case (flushing_q ? flushing_eew_q : unit_out_ctrl.eew)
                     VSEW_8:  pipe_out_res_flags_o[0].shift = vd_count_d.val[$clog2(MAX_RES_W/8)-1:0] == '0;
                     VSEW_16: pipe_out_res_flags_o[0].shift = vd_count_d.val[$clog2(MAX_RES_W/8)-1:1] == '0;
@@ -495,6 +501,7 @@ module vproc_unit_wrapper import vproc_pkg::*; #(
                 pipe_out_res_valid_o[0]                 = pipe_out_valid_o;
                 pipe_out_res_data_o [0]                 = unit_out_res;
                 pipe_out_res_mask_o [0][MAX_OP_W/8-1:0] = unit_out_mask;
+                pipe_out_res_flags_o[0].vreg_idx        = unit_out_ctrl.vreg_idx;
             end
             assign pipe_out_pend_clear_o                = unit_out_ctrl.res_store;
             assign pipe_out_pend_clear_cnt_o            = '0;
@@ -689,10 +696,11 @@ module vproc_unit_wrapper import vproc_pkg::*; #(
                    pipe_out_instr_done_o     = (~flushing_q & unit_out_ctrl.last_cycle & ~unit_out_ctrl.requires_flush ) | flushing_last_cycle;
                    pipe_out_pend_clear_o     = (~flushing_q & unit_out_ctrl.last_cycle & ~unit_out_ctrl.requires_flush ) | flushing_last_cycle;
                    pipe_out_pend_clear_cnt_o = flushing_emul_q; // TODO reductions always have destination EMUL == 1
+                   pipe_out_res_flags_o[0].vreg_idx        = unit_out_ctrl.vreg_idx;
                    
 
                 end else begin
-                    //Normal Connections for reduction operations
+                    //Normal Connections for not reduction operations
                      pipe_out_instr_id_o = unit_out_ctrl.id;
                      pipe_out_eew_o      = unit_out_ctrl.eew;
                      pipe_out_vaddr_o    = unit_out_ctrl.res_vaddr;
@@ -710,6 +718,8 @@ module vproc_unit_wrapper import vproc_pkg::*; #(
                      pipe_out_pend_clear_cnt_o = '0;
                      pipe_out_instr_done_o     = unit_out_ctrl.last_cycle;
                      pipe_out_res_flags_o[0].elemwise = 1'b0;
+                     pipe_out_res_flags_o[0].vreg_idx        = unit_out_ctrl.vreg_idx;
+                     
 
                 end
             end

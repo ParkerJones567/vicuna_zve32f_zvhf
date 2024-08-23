@@ -108,12 +108,23 @@ module vproc_vregunpack
     vregunpack_state_t stage_0;
     always_comb begin
         stage_0          = vregunpack_state_t'(DONT_CARE_ZERO ? '0 : 'x);
+        `ifdef OLD_VICUNA
         stage_0.ctrl     = pipe_in_ctrl_i;
         stage_0.eew      = pipe_in_eew_i;
         stage_0.op_load  = pipe_in_op_load_i;
         stage_0.op_vaddr = pipe_in_op_vaddr_i;
         stage_0.op_flags = pipe_in_op_flags_i;
         stage_0.op_xval  = pipe_in_op_xval_i;
+        `else
+        if (pipe_in_ready_o & pipe_in_valid_i) begin
+            stage_0.ctrl     = pipe_in_ctrl_i;
+            stage_0.eew      = pipe_in_eew_i;
+            stage_0.op_load  = pipe_in_op_load_i;
+            stage_0.op_vaddr = pipe_in_op_vaddr_i;
+            stage_0.op_flags = pipe_in_op_flags_i;
+            stage_0.op_xval  = pipe_in_op_xval_i;
+        end
+        `endif
     end
 
     // Unpack stage signals.  Note that stage 0 gets assigned the input values and hence is not an
@@ -139,7 +150,11 @@ module vproc_vregunpack
     end
 
     always_comb begin
+        `ifdef OLD_VICUNA
         stage_valid[0] = pipe_in_valid_i;
+        `else
+        stage_valid[0] = pipe_in_valid_i & pipe_in_ready_o;
+        `endif
         stage_state[0] = stage_0;
         for (int i = 1; i < UNPACK_STAGES + 1; i++) begin
             stage_valid[i] = stage_valid_q[i];
@@ -156,7 +171,12 @@ module vproc_vregunpack
         stage_state_d = stage_state_q;
         for (int i = 1; i < UNPACK_STAGES + 1; i++) begin
             if (stage_ready[i]) begin
-                stage_valid_d[i] = (i == 1) ? pipe_in_valid_i : stage_valid_q[i-1];
+                `ifdef OLD_VICUNA
+                    stage_valid_d[i] = (i == 1) ? pipe_in_valid_i : stage_valid_q[i-1];
+                `else
+                    stage_valid_d[i] = (i == 1) ? pipe_in_valid_i & pipe_in_ready_o : stage_valid_q[i-1];
+                `endif
+                
                 stage_state_d[i] = (i == 1) ? stage_0         : stage_state_q[i-1];
 
                 // operand buffer is part of the stage after the respective vreg load; this is a
@@ -206,8 +226,45 @@ module vproc_vregunpack
         end
     end
 
+
+    // Generate a stall in case the next operation and the current one will use the same read port
+    // Confirm with all pending loads in the unpack stages that the OP_SRC is not shared
+    `ifndef OLD_VICUNA
+    //TODO: find a more efficient way to store/collect these signals
+    logic [UNPACK_STAGES-1:0][OP_CNT-1:0][OP_CNT-1:0] op_conflict;
+    generate
+        //for every operand in the incoming instruction
+        for (genvar i = 0; i < OP_CNT; i++) begin
+            //for every operand that could be currently in the unpack pipeline
+            for (genvar j = 0; j < OP_CNT; j++) begin
+                //For every stage in the unpack pipeline
+                for (genvar k = 0; k < UNPACK_STAGES; k++) begin
+                    //If the operand is due to be loaded and there could be a conflict
+                    if ( (k < OP_STAGE[j]) & (OP_SRC[i] == OP_SRC[j])) begin
+                        //Mark if a conflict has occurred and a stall needs to be generated (only if input is actually valid)
+                        assign op_conflict[k][i][j] = pipe_in_op_load_i[i] & stage_state_q[1].op_load[j]  & pipe_in_valid_i;
+                    end else begin
+                        //otherwise, no conflict
+                        assign op_conflict[k][i][j] = 1'b0;
+                    end      
+                end     
+            end
+        end
+    endgenerate
+    `endif
+
+
+
+
+
+
     always_comb begin
+        `ifdef OLD_VICUNA
         pipe_in_ready_o    = stage_ready[0];
+        `else
+        pipe_in_ready_o    = stage_ready[0] & (~|op_conflict);
+        `endif
+
         pipe_out_valid_o   = stage_valid[UNPACK_STAGES];
         pipe_out_ctrl_o    = stage_state[UNPACK_STAGES].ctrl;
         pipe_out_op_data_o = stage_state[UNPACK_STAGES].op_data;

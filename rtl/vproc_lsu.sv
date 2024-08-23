@@ -58,12 +58,14 @@ module vproc_lsu import vproc_pkg::*; #(
         op_mode_lsu                  mode;
         logic [$clog2(VMEM_W/8)-1:0] vl_part;
         logic                        vl_part_0;
+        logic                        last_vl_part;
         logic [4:0]                  res_vaddr;
         logic                        res_store;
         logic                        res_shift;
         logic                        suppressed;
         logic                        exc;
         logic [5:0]                  exccode;
+        logic [5:0]                  vreg_idx; //Needed for PACK
     } lsu_state_red;
 
     ///////////////////////////////////////////////////////////////////////////
@@ -308,22 +310,24 @@ module vproc_lsu import vproc_pkg::*; #(
         end
     end
 
-    // queue for storing masks and offsets until the memory system fulfills the request:
+    // queue for storing masks and offsets until the memory system fulfills the request: //Might need to add here
     lsu_state_red state_req_red;
     always_comb begin
-        state_req_red             = DONT_CARE_ZERO ? '0 : 'x;
-        state_req_red.first_cycle = state_req_q.first_cycle;
-        state_req_red.last_cycle  = state_req_q.last_cycle;
-        state_req_red.id          = state_req_q.id;
-        state_req_red.mode        = state_req_q.mode.lsu;
-        state_req_red.vl_part     = state_req_q.vl_part;
-        state_req_red.vl_part_0   = state_req_q.vl_part_0;
-        state_req_red.res_vaddr   = state_req_q.res_vaddr;
-        state_req_red.res_store   = state_req_q.res_store;
-        state_req_red.res_shift   = state_req_q.res_shift;
-        state_req_red.suppressed  = req_suppress;
-        state_req_red.exc         = xif_mem_if.mem_resp.exc & ~req_suppress;
-        state_req_red.exccode     = xif_mem_if.mem_resp.exccode;
+        state_req_red              = DONT_CARE_ZERO ? '0 : 'x;
+        state_req_red.first_cycle  = state_req_q.first_cycle;
+        state_req_red.last_cycle   = state_req_q.last_cycle;
+        state_req_red.id           = state_req_q.id;
+        state_req_red.mode         = state_req_q.mode.lsu;
+        state_req_red.vl_part      = state_req_q.vl_part;
+        state_req_red.vl_part_0    = state_req_q.vl_part_0;
+        state_req_red.last_vl_part = state_req_q.last_vl_part;
+        state_req_red.res_vaddr    = state_req_q.res_vaddr;
+        state_req_red.res_store    = state_req_q.res_store;
+        state_req_red.res_shift    = state_req_q.res_shift;
+        state_req_red.vreg_idx     = state_req_q.vreg_idx;
+        state_req_red.suppressed   = req_suppress;
+        state_req_red.exc          = xif_mem_if.mem_resp.exc & ~req_suppress;
+        state_req_red.exccode      = xif_mem_if.mem_resp.exccode;
     end
     logic         deq_valid; // LSU queue dequeue valid signal
     logic         deq_ready;
@@ -410,6 +414,7 @@ module vproc_lsu import vproc_pkg::*; #(
     assign rdata_stri_vdmsk   = ~state_rdata_q.vl_part_0 & (state_rdata_q.mode.masked ? rmask_buf_q[0] : 1'b1);
 
     assign pipe_out_valid_o = state_rdata_valid_q;
+
     always_comb begin
         pipe_out_ctrl_o              = DONT_CARE_ZERO ? '0 : 'x;
         pipe_out_ctrl_o.first_cycle  = state_rdata_q.first_cycle;
@@ -419,6 +424,8 @@ module vproc_lsu import vproc_pkg::*; #(
         pipe_out_ctrl_o.eew          = state_rdata_q.mode.eew;
         pipe_out_ctrl_o.vl_part      = state_rdata_q.vl_part;
         pipe_out_ctrl_o.vl_part_0    = state_rdata_q.vl_part_0;
+        pipe_out_ctrl_o.last_vl_part = state_rdata_q.last_vl_part & state_rdata_q.res_store; //only pass last_vl_part if storing to vreg
+        pipe_out_ctrl_o.vreg_idx     = state_rdata_q.vreg_idx;
         pipe_out_ctrl_o.res_vaddr    = state_rdata_q.res_vaddr;
         pipe_out_ctrl_o.res_store    = state_rdata_q.res_store & ~state_rdata_q.exc;
         pipe_out_ctrl_o.res_shift    = state_rdata_q.res_shift;

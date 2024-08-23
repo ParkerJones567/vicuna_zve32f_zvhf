@@ -324,6 +324,8 @@ module vproc_pipeline import vproc_pkg::*; #(
                     alt_count_next_inc.val = state_q.alt_count.val + (1 << $clog2(MAX_OP_W/COUNTER_OP_W));
                 end
                 default: ;
+
+
             endcase
         end
     end
@@ -332,38 +334,69 @@ module vproc_pipeline import vproc_pkg::*; #(
     always_comb begin
         last_cycle_next     = DONT_CARE_ZERO ? 1'b0 : 1'bx;
         alt_last_cycle_next = DONT_CARE_ZERO ? 1'b0 : 1'bx;
+
         // first cycle is not last cycle unless EMUL is 1 and the counter has no low part
         if (~state_valid_q | state_done) begin
             // TODO take exceptions into account (OP_ALT_COUNTER != 0 and auxiliary counter)
-            last_cycle_next     = (pipe_in_state_i.emul == EMUL_1) & (COUNTER_W == 4);
-            alt_last_cycle_next = (pipe_in_state_i.emul == EMUL_1) & (COUNTER_W == 4);
+
+            //Changes to control flow to improve performance.  Introduces timing anomalies
+            //When early stopping is enabled, a new scenario for the first cycle to be the last when the VL < MAX_OP_W/8, ie. entire vector fits in the functional unit
+            `ifdef OLD_VICUNA
+                last_cycle_next     = ((pipe_in_state_i.emul == EMUL_1) & (COUNTER_W == 4));
+                alt_last_cycle_next = ((pipe_in_state_i.emul == EMUL_1) & (COUNTER_W == 4));
+            `else
+                last_cycle_next     = ((pipe_in_state_i.emul == EMUL_1) & (COUNTER_W == 4)) | pipe_in_state_i.vl < MAX_OP_W/8;
+                alt_last_cycle_next = ((pipe_in_state_i.emul == EMUL_1) & (COUNTER_W == 4)) | pipe_in_state_i.vl < MAX_OP_W/8;
+
+            `endif
         end else begin
+
+            // Changes to control flow to improve performance.  Introduces timing anomalies
+            // Change how last_cycle_next is calculated to enable early stopping.  Now depends on the current Vector Length
+            `ifdef OLD_VICUNA
+
             last_cycle_next     =     count_next_inc.val[COUNTER_W-5:$clog2(MAX_OP_W/COUNTER_OP_W)] == '1;
             alt_last_cycle_next = alt_count_next_inc.val[COUNTER_W-5:$clog2(MAX_OP_W/COUNTER_OP_W)] == '1;
-            // clear last cycle in case lower bits are not set for lower counter increments
+            //clear last cycle in case lower bits are not set for lower counter increments
             unique case (state_q.count_inc)
-                COUNT_INC_1: for (int i = 0; i < $clog2(MAX_OP_W/COUNTER_OP_W); i++) begin
-                    last_cycle_next     &=     count_next_inc.val[i];
-                    alt_last_cycle_next &= alt_count_next_inc.val[i];
-                end
-                COUNT_INC_2: for (int i = 1; i < $clog2(MAX_OP_W/COUNTER_OP_W); i++) begin
-                    last_cycle_next     &=     count_next_inc.val[i];
-                    alt_last_cycle_next &= alt_count_next_inc.val[i];
-                end
-                COUNT_INC_4: for (int i = 2; i < $clog2(MAX_OP_W/COUNTER_OP_W); i++) begin
-                    last_cycle_next     &=     count_next_inc.val[i];
-                    alt_last_cycle_next &= alt_count_next_inc.val[i];
-                end
-                default: ;
+               COUNT_INC_1: for (int i = 0; i < $clog2(MAX_OP_W/COUNTER_OP_W); i++) begin
+                   last_cycle_next     &=     count_next_inc.val[i];
+                   alt_last_cycle_next &= alt_count_next_inc.val[i];
+               end
+               COUNT_INC_2: for (int i = 1; i < $clog2(MAX_OP_W/COUNTER_OP_W); i++) begin
+                   last_cycle_next     &=     count_next_inc.val[i];
+                   alt_last_cycle_next &= alt_count_next_inc.val[i];
+               end
+               COUNT_INC_4: for (int i = 2; i < $clog2(MAX_OP_W/COUNTER_OP_W); i++) begin
+                   last_cycle_next     &=     count_next_inc.val[i];
+                   alt_last_cycle_next &= alt_count_next_inc.val[i];
+               end
+               default: ;
             endcase
-            // clear last cycle based on EMUL (note: the alt_last_cycle signal is not cleared here
-            // as that is only required to indicate completion of one vreg cycle)
+            //clear last cycle based on EMUL (note: the alt_last_cycle signal is not cleared here
+            //as that is only required to indicate completion of one vreg cycle)
             unique case (state_q.emul)
-                EMUL_2: last_cycle_next &= count_next_inc.part.mul[  0] == '1;
-                EMUL_4: last_cycle_next &= count_next_inc.part.mul[1:0] == '1;
-                EMUL_8: last_cycle_next &= count_next_inc.part.mul[2:0] == '1;
-                default: ;
+               EMUL_2: last_cycle_next &= count_next_inc.part.mul[  0] == '1;
+               EMUL_4: last_cycle_next &= count_next_inc.part.mul[1:0] == '1;
+               EMUL_8: last_cycle_next &= count_next_inc.part.mul[2:0] == '1;
+               default: ;
             endcase
+
+            `else
+
+            //VL/(MAX_OP_W/8) is number of operations needed to finish the current VL
+            // * (MAX_OP_W/COUNTER_OP_W) is number of increments of the counter for a full OP W.  all bits of VL below MAX_OP_W are cleared with this shifting order
+            last_cycle_next     =     count_next_inc >= (state_q.vl >> $clog2(MAX_OP_W/8)) << $clog2(MAX_OP_W/COUNTER_OP_W); 
+            alt_last_cycle_next =     alt_count_next_inc >= (state_q.vl >> $clog2(MAX_OP_W/8)) << $clog2(MAX_OP_W/COUNTER_OP_W);
+
+            //clear last cycle in case processing final elements for elemwise operation
+            if (state_q.op_flags[0].elemwise) begin //TODO: why doesnt this formula work above, only for elemwise)
+                last_cycle_next     =     count_next_inc >= (state_q.vl  >> ($clog2(MAX_OP_W/8) - $clog2(MAX_OP_W/COUNTER_OP_W))) -1; 
+                alt_last_cycle_next =     alt_count_next_inc >= (state_q.vl >> ($clog2(MAX_OP_W/8) - $clog2(MAX_OP_W/COUNTER_OP_W))) -1;
+
+            end
+   
+            `endif
             if ((OP_ALT_COUNTER != '0) & state_q.count.part.sign) begin
                 last_cycle_next = '0;
             end
@@ -459,24 +492,40 @@ module vproc_pipeline import vproc_pkg::*; #(
     // Result store and shift signals
     logic res_store;
     logic res_shift;
+    logic extra_cycle;
+    assign extra_cycle =  (state_q.vl == '0) ? 1'b1 : 1'b0;
     always_comb begin
         res_store = '0;
         res_shift = '0;
         // Store uses next counter value (after increment, but not taking into account a potential
         // new instruction) and current state (i.e., also disregarding new instructions)
         // TODO consider the auxiliary counter
+        
+        // Changes to control flow to improve performance.  Introduces timing anomalies
+        // Change how res_store is caculated to enable early stopping. Now depends on the current Vector Length
+        `ifdef OLD_VICUNA
         if ((count_next_inc.part.low == '0) & ((OP_ALT_COUNTER == '0) | ~state_q.count.part.sign) &
-            ((RES_ALWAYS_VREG | state_q.res_vreg) != '0) // at least one valid vreg
-        ) begin
+           ((RES_ALWAYS_VREG | state_q.res_vreg) != '0) // at least one valid vreg
+            ) begin
             res_store = ((RES_NARROW & state_q.res_narrow) == '0) | ~count_next_inc.part.mul[0];
         end
+        `else
+        //if count_next_inc.part.low == 0, then a single vreg has been filled.  The second condition triggers when the end of the vector has been reached in the middle of a vreg (extra condition needed for when vl == 0 (1 byte element) to not trigger twice)
+        if ((count_next_inc.part.low  == '0 | (count_next_inc > ((state_q.vl) >> $clog2(MAX_OP_W/8)) << $clog2(MAX_OP_W/COUNTER_OP_W))) & ((OP_ALT_COUNTER == '0) | ~state_q.count.part.sign) &
+            ((RES_ALWAYS_VREG | state_q.res_vreg) != '0) // at least one valid vreg
+            ) begin
+            //if (~state_q.op_flags[0].elemwise  | count_next_inc > (state_q.vl  >> ($clog2(MAX_OP_W/8) - $clog2(MAX_OP_W/COUNTER_OP_W)))) begin //TODO: why doesnt this formula work above, only for elemwise)
+                            res_store = ((RES_NARROW & state_q.res_narrow) == '0) | ~count_next_inc.part.mul[0];
+            //end - This fixes the extra res_store signals, but not sure theyre a problem.
+
+        end
+        `endif
         // Shifting is delayed by one cycle compared to the store and hence uses the current counter
         if ((state_q.count.val & ~({COUNTER_W{1'b1}} << $clog2(RES_W[0] / COUNTER_OP_W))) == '0) begin
             res_shift = ((RES_NARROW & state_q.res_narrow) == '0) |
                         ~state_q.count[$clog2(RES_W[0] / COUNTER_OP_W)];
         end
     end
-
 
     ///////////////////////////////////////////////////////////////////////////
     // OPERAND ADDRESS, FLAGS, AND READ SIGNAL GENERATION
@@ -701,12 +750,16 @@ module vproc_pipeline import vproc_pkg::*; #(
         logic [4:0]                    res_vaddr;
         logic                          pend_load;
         logic                          pend_store;
+        logic                     [$clog2(VREG_W/MAX_OP_W)-1 :0] vreg_idx; //TODO: This should be defined per pipeline as log2(VREG_W/MAX_OP_W) bits wide.  Needed by PACK to write results to correct locations
     } ctrl_t;
 
     logic  unpack_valid;
     ctrl_t unpack_ctrl;
     always_comb begin
         unpack_valid                = state_valid_q & ~state_stall & ~state_wait_alt_count_q;
+
+        unpack_ctrl.vreg_idx = state_q.count >> $clog2(MAX_OP_W/COUNTER_OP_W); //TODO: Explicity truncate this vector (dropping upper bits is itentional behavior, causes loop to beginning after a vreg has been written)
+
         unpack_ctrl.count_mul       = state_q.count.part.mul;
         unpack_ctrl.first_cycle     = state_q.first_cycle;
         unpack_ctrl.last_cycle      = state_valid_q & state_q.last_cycle & // TODO remove state_valid_q
@@ -735,6 +788,7 @@ module vproc_pipeline import vproc_pkg::*; #(
         unpack_ctrl.vl_part      = (state_q.count.val[COUNTER_W-2:$clog2(MAX_OP_W/COUNTER_OP_W)] == state_q.vl[CFG_VL_W-1:$clog2(MAX_OP_W/8)]) ?  state_q.vl[$clog2(MAX_OP_W/8)-1:0] : '1;
         unpack_ctrl.vl_part_0    = (state_q.count.val[COUNTER_W-2:$clog2(MAX_OP_W/COUNTER_OP_W)] >  state_q.vl[CFG_VL_W-1:$clog2(MAX_OP_W/8)]) |  state_q.vl_0;
         unpack_ctrl.last_vl_part = (state_q.count.val[COUNTER_W-2:$clog2(MAX_OP_W/COUNTER_OP_W)] == state_q.vl[CFG_VL_W-1:$clog2(MAX_OP_W/8)]) & ~state_q.vl_0;
+
         if ((UNITS[UNIT_LSU ] & (state_q.unit == UNIT_LSU ) & (state_q.mode.lsu.stride != LSU_UNITSTRIDE)) |
             (UNITS[UNIT_ELEM] & (state_q.unit == UNIT_ELEM)) | (UNITS[UNIT_FPU] & (state_q.unit == UNIT_FPU))
         ) begin
