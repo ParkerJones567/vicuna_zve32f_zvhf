@@ -172,7 +172,9 @@ module vproc_cache #(
     assign tag_match_line = tag_match_way0 ? way0_rline : way1_rline;
     assign tag_match_err  = tag_match_way0 ? way0_rerr  : way1_rerr;
 
-    logic                     cache_hit, cache_miss, cache_spill;
+    logic  cache_hit /* verilator public */;
+    logic  cache_miss /* verilator public */; 
+    logic cache_spill;
     logic [TAG_BIT_W-1:0]     spill_tag;
     logic [LINE_BYTE_W*8-1:0] spill_line;
     assign cache_hit   = check_tag_q & (tag_match_way0 | tag_match_way1);

@@ -44,7 +44,6 @@ module vproc_top import vproc_pkg::*; #(
     end
     assign sync_rst_n = rst_sync_qn[3];
 
-
     ///////////////////////////////////////////////////////////////////////////
     // MAIN CORE INTEGRATION
 
@@ -305,6 +304,12 @@ module vproc_top import vproc_pkg::*; #(
         .fetch_enable_i      ( 1'b1          ),
         .core_sleep_o        (               )
     );
+
+    //Report when an instruction is offloaded and accepted.  Valid instruction offloaded when issue_valid and issue_ready are both high
+    logic has_offloaded /* verilator public */;
+    assign has_offloaded = host_xif.issue_valid & host_xif.issue_ready;
+    logic [31:0] inst_offloaded /* verilator public */;
+    assign inst_offloaded = host_xif.issue_req.instr;
     
     `ifndef SCALAR_FPU_ON
     //CONNECTING VPROC_XIF to HOST_XIF.
