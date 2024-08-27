@@ -421,7 +421,12 @@ module vproc_top import vproc_pkg::*; #(
     logic [X_ID_WIDTH-1:0] vdata_req_id;
     logic [X_ID_WIDTH-1:0] vdata_res_id;
 
+    // Allow for vector loads/stores to be misaligned with respect to VMEM_W
+    `ifdef FORCE_ALIGNED_READS
     localparam bit [VLSU_FLAGS_W-1:0] VLSU_FLAGS = (VLSU_FLAGS_W'(1) << VLSU_ALIGNED_UNITSTRIDE);
+    `else
+    localparam bit [VLSU_FLAGS_W-1:0] VLSU_FLAGS = (VLSU_FLAGS_W'(0) << VLSU_ALIGNED_UNITSTRIDE);
+    `endif
 
     localparam bit [BUF_FLAGS_W -1:0] BUF_FLAGS  = (BUF_FLAGS_W'(1) << BUF_DEQUEUE  ) |
                                                    (BUF_FLAGS_W'(1) << BUF_VREG_PEND);
@@ -463,6 +468,9 @@ module vproc_top import vproc_pkg::*; #(
 
         .pend_vreg_wr_map_o ( pend_vreg_wr_map_o )
     );
+
+
+
 `endif
 
 `ifdef SCALAR_FPU_ON
@@ -862,11 +870,18 @@ module vproc_top import vproc_pkg::*; #(
         data_req   = vdata_req | (sdata_req & ~sdata_hold);
         data_addr  = sdata_addr;
         data_we    = sdata_we;
+        
+        `ifdef FORCE_ALIGNED_READS
         data_be    = {{(VMEM_W-32){1'b0}}, sdata_be} << (sdata_addr[$clog2(VMEM_W/8)-1:0] & {{$clog2(VMEM_W/32){1'b1}}, 2'b00});
         data_wdata = '0;
         for (int i = 0; i < VMEM_W / 32; i++) begin
             data_wdata[32*i +: 32] = sdata_wdata;
         end
+        `else
+        data_be    = {{(VMEM_W-32){1'b0}}, sdata_be};
+        data_wdata = {{(VMEM_W-32){1'b0}}, sdata_wdata};
+        `endif
+        
         if (vdata_req) begin
             data_addr  = vdata_addr;
             data_we    = vdata_we;
@@ -903,7 +918,12 @@ module vproc_top import vproc_pkg::*; #(
     assign vdata_rvalid = vdata_waiting & data_rvalid;
     assign sdata_err    = data_err;
     assign vdata_err    = data_err;
+
+    `ifdef FORCE_ALIGNED_READS
     assign sdata_rdata  = data_rdata[(sdata_wait_addr[$clog2(VMEM_W)-1:0] & {3'b000, {($clog2(VMEM_W/8)-2){1'b1}}, 2'b00})*8 +: 32];
+    `else
+    assign sdata_rdata  = data_rdata[31:0];
+    `endif
     assign vdata_rdata  = data_rdata;
     assign vdata_res_id = vdata_wait_id;
 
@@ -940,6 +960,7 @@ module vproc_top import vproc_pkg::*; #(
                 .cpu_rvalid_o ( instr_rvalid      ),
                 .cpu_rdata_o  ( instr_rdata       ),
                 .cpu_err_o    ( instr_err         ),
+                .vector_req_i ( '0                ),
                 .mem_req_o    ( imem_req          ),
                 .mem_addr_o   ( imem_addr         ),
                 .mem_we_o     (                   ),
@@ -998,6 +1019,7 @@ module vproc_top import vproc_pkg::*; #(
                 .cpu_rvalid_o ( data_rvalid       ),
                 .cpu_rdata_o  ( data_rdata        ),
                 .cpu_err_o    ( data_err          ),
+                .vector_req_i ( vdata_req         ),
                 .mem_req_o    ( dmem_req          ),
                 .mem_we_o     ( dmem_we           ),
                 .mem_addr_o   ( dmem_addr         ),

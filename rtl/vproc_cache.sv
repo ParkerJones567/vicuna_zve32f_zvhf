@@ -26,6 +26,7 @@ module vproc_cache #(
         output logic                    cpu_rvalid_o,
         output logic [CPU_BYTE_W*8-1:0] cpu_rdata_o,
         output logic                    cpu_err_o,
+        input  logic                    vector_req_i,
 
         // Memory request interface
         output logic                    mem_req_o,
@@ -150,17 +151,29 @@ module vproc_cache #(
             mem_req_cnt_q.part.cnt   <= '0;
             mem_data_cnt_q.part.done <= 1'b1;
             mem_data_cnt_q.part.cnt  <= '0;
+            `ifndef FORCE_ALIGNED_READS
+            split_op_q               <= 0;
+            bytes_remaining_q        <= '0;
+            split_op_buffer_q        <= '0;
+            next_res_split_q         <= 0;
+            `endif
         end else begin
-            check_tag_q    <= check_tag_d;
-            lru_q          <= lru_d;
-            way0_valid_q   <= way0_valid_d;
-            way1_valid_q   <= way1_valid_d;
-            cpu_addr_q     <= cpu_addr_d;
-            cpu_we_q       <= cpu_we_d;
-            cpu_wbe_q      <= cpu_wbe_d;
-            cpu_wdata_q    <= cpu_wdata_d;
-            mem_req_cnt_q  <= mem_req_cnt_d;
-            mem_data_cnt_q <= mem_data_cnt_d;
+            check_tag_q              <= check_tag_d;
+            lru_q                    <= lru_d;
+            way0_valid_q             <= way0_valid_d;
+            way1_valid_q             <= way1_valid_d;
+            cpu_addr_q               <= cpu_addr_d;
+            cpu_we_q                 <= cpu_we_d;
+            cpu_wbe_q                <= cpu_wbe_d;
+            cpu_wdata_q              <= cpu_wdata_d;
+            mem_req_cnt_q            <= mem_req_cnt_d;
+            mem_data_cnt_q           <= mem_data_cnt_d;
+            `ifndef FORCE_ALIGNED_READS
+            split_op_q               <= split_op_d;
+            bytes_remaining_q        <= bytes_remaining_d;
+            split_op_buffer_q        <= split_op_buffer_d;
+            next_res_split_q         <= next_res_split_d;
+            `endif
         end
     end
 
@@ -183,13 +196,26 @@ module vproc_cache #(
     assign spill_tag   = lru_q[cpu_addr_q.part.index] ? way1_rtag   : way0_rtag;
     assign spill_line  = lru_q[cpu_addr_q.part.index] ? way1_rline  : way0_rline;
 
+    `ifndef FORCE_ALIGNED_READS
+    logic split_op_d, split_op_q;
+    logic next_res_split_d, next_res_split_q;
+    logic [OFFSET_BIT_W-1:0] bytes_remaining_d, bytes_remaining_q;
+    logic [CPU_BYTE_W*8-1:0] split_op_buffer_d, split_op_buffer_q;
+    `endif
+
     logic [OFFSET_BIT_W-1:0] cpu_addr_offset;
     generate
+    `ifdef FORCE_ALIGNED_READS
         if (LINE_BYTE_W > CPU_BYTE_W) begin
+            
             assign cpu_addr_offset = {cpu_addr_q.part.offset[OFFSET_BIT_W-1:$clog2(CPU_BYTE_W)], {$clog2(CPU_BYTE_W){1'b0}}};
+
         end else begin
             assign cpu_addr_offset = '0;
         end
+    `else
+            assign cpu_addr_offset = cpu_addr_q.part.offset;
+    `endif
     endgenerate
 
     always_comb begin
@@ -203,6 +229,12 @@ module vproc_cache #(
         cpu_wdata_d    = cpu_wdata_q;
         mem_req_cnt_d  = mem_req_cnt_q;
         mem_data_cnt_d = mem_data_cnt_q;
+        `ifndef FORCE_ALIGNED_READS
+        split_op_d     = split_op_q;
+        bytes_remaining_d = bytes_remaining_q;
+        split_op_buffer_d = split_op_buffer_q;
+        next_res_split_d = next_res_split_q;
+        `endif
 
         if (mem_data_cnt_q.part.done) begin
             // no fill operation in progress
@@ -210,13 +242,42 @@ module vproc_cache #(
             if (mem_req_cnt_q.part.done) begin
                 // no spill operation in progress
 
-                // if there is a CPU request, schedule tag check for next cycle
-                if (cpu_req_i & ~cache_miss) begin
+                //if handling the second half of a request to a different cache line, (only occurs when previous cache line hits)
+                //Needs to be checked first so a new request is not accepted if one is still ongoing
+                `ifndef FORCE_ALIGNED_READS
+                 if (split_op_q & ~cache_miss) begin
+                     check_tag_d     = 1'b1;
+                     cpu_addr_d.addr = cpu_addr_q.addr + (CPU_BYTE_W - bytes_remaining_q);//Get the first address in the new cache block
+                     cpu_we_d        = cpu_we_q; //WE behaviour unchanged
+                     cpu_wbe_d       = (cpu_wbe_q >> (CPU_BYTE_W - bytes_remaining_q)); //Shift byte enable mask and data to align with new address for new cache line
+                     cpu_wdata_d     = cpu_wdata_q >> 8 * (CPU_BYTE_W - bytes_remaining_q);
+                     split_op_d      = 1'b0;
+                     //split_op_buffer_d = tag_match_line[cpu_addr_offset * 8 +: (CPU_BYTE_W * 8)]; //Store the first result in the buffer.  Indexing out of the range of the cache line returns 0s.
+                     //Need to clear bits that were indexed out of bound TODO: Possibly a better way to do this with a generate block?
+                     for (int i = 0; i < CPU_BYTE_W; i++) begin
+                         if (i < (8 * (CPU_BYTE_W - bytes_remaining_q))) begin
+                             split_op_buffer_d[i] = tag_match_line[cpu_addr_offset * 8 + i];
+                         end
+                         else begin
+                             split_op_buffer_d[i] = 0;
+                         end
+                     end
+                     next_res_split_d = 1'b1;
+
+                // if there is a CPU request schedule tag check for next cycle
+                end else 
+                `endif
+                if ((cpu_req_i) & ~cache_miss) begin
                     check_tag_d     = 1'b1;
                     cpu_addr_d.addr = cpu_addr_i;
                     cpu_we_d        = cpu_we_i;
                     cpu_wbe_d       = cpu_be_i;
                     cpu_wdata_d     = cpu_wdata_i;
+                    `ifndef FORCE_ALIGNED_READS
+                    split_op_d      = vector_req_i ? (cpu_addr.part.offset + CPU_BYTE_W) > LINE_BYTE_W : 1'b0; //TODO: only enable split op if the request actually needs the second cache line (how often will this happen?)
+                    bytes_remaining_d = (cpu_addr.part.offset + CPU_BYTE_W) - LINE_BYTE_W;
+                    next_res_split_d = 1'b0;
+                    `endif
                 end
 
                 // update LRU way upon each tag check
@@ -286,14 +347,27 @@ module vproc_cache #(
     assign way_wline_be   = mem_data_cnt_q.part.done ?
                             {{(LINE_BYTE_W - CPU_BYTE_W){1'b0}}, cpu_wbe_q         } << cpu_addr_offset :
                             {{(LINE_BYTE_W - MEM_BYTE_W){1'b0}}, {MEM_BYTE_W{1'b1}}} << (MEM_BYTE_W * mem_data_cnt_q.part.cnt);
+
+    `ifdef FORCE_ALIGNED_READS
     assign way_wline_data = mem_data_cnt_q.part.done ? {(LINE_BYTE_W / CPU_BYTE_W){cpu_wdata_q}} : {(LINE_BYTE_W / MEM_BYTE_W){mem_rdata_i}};
+
+    `else
+    assign way_wline_data = mem_data_cnt_q.part.done ? {{(LINE_BYTE_W - CPU_BYTE_W){1'b0}} , cpu_wdata_q} << (cpu_addr_offset * 8) : {(LINE_BYTE_W / MEM_BYTE_W){mem_rdata_i}};
+    `endif
+
     assign way_wdirty     = mem_data_cnt_q.part.done & cpu_we_q;
     assign way_werr       = ~mem_data_cnt_q.part.done & mem_err_i;
 
     // CPU interface signals
     assign cpu_gnt_o    = mem_req_cnt_q.part.done & mem_data_cnt_q.part.done & ~cache_miss;
+    //On a transaction split across two cache lines, the second half of the transaction will always start from offset 0.  The first half will always be the lower part of the buffer
+    `ifdef FORCE_ALIGNED_READS
     assign cpu_rvalid_o = cache_hit; // & ~cpu_we_q;
     assign cpu_rdata_o  = tag_match_line[cpu_addr_offset * 8 +: CPU_BYTE_W * 8];
+    `else
+    assign cpu_rvalid_o = cache_hit & ~split_op_q; // & ~cpu_we_q;
+    assign cpu_rdata_o  = next_res_split_q ? (tag_match_line[0 +: CPU_BYTE_W * 8] << (bytes_remaining_q * 8)) | split_op_buffer_q : tag_match_line[cpu_addr_offset * 8 +: CPU_BYTE_W * 8];
+    `endif
     assign cpu_err_o    = tag_match_err;
 
     // memory interface signals
