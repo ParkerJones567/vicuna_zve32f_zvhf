@@ -60,6 +60,9 @@ module vproc_unit_wrapper import vproc_pkg::*; #(
         output logic                                 trans_complete_exc_o,
         output logic    [5:0]                        trans_complete_exccode_o,
 
+        `ifdef VICUNA_F_ON
+        output logic                                 freg_res,
+        `endif 
         output logic                                 xreg_valid_o,
         input  logic                                 xreg_ready_i,
         output logic    [XIF_ID_W              -1:0] xreg_id_o,
@@ -304,6 +307,9 @@ module vproc_unit_wrapper import vproc_pkg::*; #(
                 .pipe_out_ready_i      ( unit_out_ready                 ),
                 .pipe_out_ctrl_o       ( unit_out_ctrl                  ),
                 .pipe_out_xreg_valid_o ( unit_out_xreg_valid            ),
+                `ifdef VICUNA_F_ON
+                .pipe_out_freg         ( freg_res                       ),
+                `endif
                 .pipe_out_xreg_data_o  ( xreg_data_o                    ),
                 .pipe_out_xreg_addr_o  ( xreg_addr_o                    ),
                 .pipe_out_res_valid_o  ( unit_out_res_valid             ),

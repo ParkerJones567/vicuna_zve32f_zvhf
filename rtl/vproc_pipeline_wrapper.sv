@@ -71,6 +71,10 @@ module vproc_pipeline_wrapper import vproc_pkg::*; #(
         output logic                    trans_complete_exc_o,
         output logic [5:0]              trans_complete_exccode_o,
 
+        `ifdef VICUNA_F_ON
+        output logic                    freg_res,
+        `endif 
+        
         output logic                    xreg_valid_o,
         input  logic                    xreg_ready_i,
         output logic [XIF_ID_W-1:0]     xreg_id_o,
@@ -443,7 +447,6 @@ module vproc_pipeline_wrapper import vproc_pkg::*; #(
                 endcase
             end
         end
-
         for (int i = 0; i < OP_CNT; i++) begin
             state_init.op_flags[i]    = unpack_flags'('0);
         end

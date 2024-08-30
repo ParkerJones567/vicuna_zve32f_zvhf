@@ -21,6 +21,13 @@ module vproc_decoder #(
         input  vproc_pkg::cfg_vxrm      vxrm_i,       // current rounding mode
         input  logic [CFG_VL_W-1:0]     vl_i,         // current vector length
 
+
+        `ifdef VICUNA_F_ON
+        output logic fpr_wr_req_valid,
+        output logic [4:0] fpr_wr_req_addr_o,
+        input fpnew_pkg::roundmode_e float_round_mode_i,
+        `endif
+
         output logic                    valid_o,
         output vproc_pkg::cfg_vsew      vsew_o,       // VSEW setting for this instruction
         output vproc_pkg::cfg_emul      emul_o,       // LMUL setting for this instruction
@@ -52,9 +59,6 @@ module vproc_decoder #(
     logic [CFG_VL_W-1:0]     vl; //vector length for EMUL override
     evl_policy evl_pol;
 
-
-    logic test_cond;
-
     always_comb begin
         instr_illegal = 1'b0;
         emul_override = 1'b0;
@@ -79,6 +83,13 @@ module vproc_decoder #(
         rd_o.addr     = instr_vd;
 
         widenarrow_o  = OP_SINGLEWIDTH;
+
+        `ifdef VICUNA_F_ON
+
+        fpr_wr_req_valid = DONT_CARE_ZERO ? 1'b0 : 1'bx;
+        fpr_wr_req_addr_o = DONT_CARE_ZERO ? '0 : 'x;
+
+        `endif
 
         unique case (instr_i[6:0])
 
@@ -211,7 +222,9 @@ module vproc_decoder #(
                                 end
                             end
                             5'b10000: begin // fault-only-first load
-                                instr_illegal = instr_i[6:0] == 7'h27; // illegal for stores
+                                if ( instr_i[6:0] == 7'h27) begin
+                                   instr_illegal = 1'b1;// illegal for stores
+                                end
                             end
                             5'b01000: begin // whole register load/store
                                 emul_override = 1'b1; //TODO: PROBABLY NEEDS SAME TREATMENT AS VMV4R -CHANGE NOT VERIFIED
@@ -1394,7 +1407,7 @@ module vproc_decoder #(
                             mode_o.fpu.op_mod     = 1'b0;
                             mode_o.fpu.op_rev     = 1'b0;
                             mode_o.fpu.op_reduction = 1'b0;
-                            mode_o.fpu.rnd_mode   = RNE;//TODO:SELECT PROPERLY
+                            mode_o.fpu.rnd_mode   = float_round_mode_i;
                             mode_o.fpu.masked     = instr_masked;
                             mode_o.fpu.src_1_narrow = 1'b0;
                             mode_o.fpu.src_2_narrow = 1'b0;
@@ -1407,7 +1420,7 @@ module vproc_decoder #(
                             mode_o.fpu.op_mod     = 1'b0; //Currently treating all reductions as ordered reductions.  TODO: improve performance by implementing unordered reductions more efficiently
                             mode_o.fpu.op_rev     = 1'b0;
                             mode_o.fpu.op_reduction = 1'b1;
-                            mode_o.fpu.rnd_mode   = RNE;//TODO:SELECT PROPERLY
+                            mode_o.fpu.rnd_mode   = float_round_mode_i;
                             mode_o.fpu.masked     = instr_masked;
                             mode_o.fpu.src_1_narrow = 1'b0;
                             mode_o.fpu.src_2_narrow = 1'b0;
@@ -1421,7 +1434,7 @@ module vproc_decoder #(
                             mode_o.fpu.op_mod     = 1'b1;
                             mode_o.fpu.op_rev     = 1'b0;
                             mode_o.fpu.op_reduction = 1'b0;
-                            mode_o.fpu.rnd_mode   = RNE;//TODO:SELECT PROPERLY
+                            mode_o.fpu.rnd_mode   = float_round_mode_i;
                             mode_o.fpu.masked     = instr_masked;
                             mode_o.fpu.src_1_narrow = 1'b0;
                             mode_o.fpu.src_2_narrow = 1'b0;
@@ -1433,7 +1446,7 @@ module vproc_decoder #(
                             mode_o.fpu.op_mod     = 1'b0; //Currently treating all reductions as ordered reductions.  TODO: improve performance by implementing unordered reductions more efficiently
                             mode_o.fpu.op_rev     = 1'b0;
                             mode_o.fpu.op_reduction = 1'b1;
-                            mode_o.fpu.rnd_mode   = RNE;//TODO:SELECT PROPERLY
+                            mode_o.fpu.rnd_mode   = float_round_mode_i;
                             mode_o.fpu.masked     = instr_masked;
                             mode_o.fpu.src_1_narrow = 1'b0;
                             mode_o.fpu.src_2_narrow = 1'b0;
@@ -1542,7 +1555,7 @@ module vproc_decoder #(
                             mode_o.fpu.op_mod     = 1'b0;
                             mode_o.fpu.op_rev     = 1'b0;
                             mode_o.fpu.op_reduction = 1'b0;
-                            mode_o.fpu.rnd_mode   = RNE;//TODO:SELECT PROPERLY
+                            mode_o.fpu.rnd_mode   = float_round_mode_i;
                             mode_o.fpu.masked     = instr_masked;
                             mode_o.fpu.src_1_narrow = 1'b0;
                             mode_o.fpu.src_2_narrow = 1'b0;
@@ -1555,7 +1568,7 @@ module vproc_decoder #(
                             mode_o.fpu.op_mod     = 1'b0;
                             mode_o.fpu.op_rev     = 1'b1;
                             mode_o.fpu.op_reduction = 1'b0;
-                            mode_o.fpu.rnd_mode   = RNE;//TODO:SELECT PROPERLY
+                            mode_o.fpu.rnd_mode   = float_round_mode_i;
                             mode_o.fpu.masked     = instr_masked;
                             mode_o.fpu.src_1_narrow = 1'b0;
                             mode_o.fpu.src_2_narrow = 1'b0;
@@ -1569,7 +1582,7 @@ module vproc_decoder #(
                             mode_o.fpu.op_mod     = 1'b0;
                             mode_o.fpu.op_rev     = 1'b0;
                             mode_o.fpu.op_reduction = 1'b0;
-                            mode_o.fpu.rnd_mode   = RNE;//TODO:SELECT PROPERLY
+                            mode_o.fpu.rnd_mode   = float_round_mode_i;
                             mode_o.fpu.masked     = instr_masked;
                             mode_o.fpu.src_1_narrow = 1'b0;
                             mode_o.fpu.src_2_narrow = 1'b0;
@@ -1582,7 +1595,7 @@ module vproc_decoder #(
                             mode_o.fpu.op_mod     = 1'b1;
                             mode_o.fpu.op_rev     = 1'b1;
                             mode_o.fpu.op_reduction = 1'b0;
-                            mode_o.fpu.rnd_mode   = RNE;//TODO:SELECT PROPERLY
+                            mode_o.fpu.rnd_mode   = float_round_mode_i;
                             mode_o.fpu.masked     = instr_masked;
                             mode_o.fpu.src_1_narrow = 1'b0;
                             mode_o.fpu.src_2_narrow = 1'b0;
@@ -1596,7 +1609,7 @@ module vproc_decoder #(
                             mode_o.fpu.op_mod     = 1'b0;
                             mode_o.fpu.op_rev     = 1'b1;
                             mode_o.fpu.op_reduction = 1'b0;
-                            mode_o.fpu.rnd_mode   = RNE;//TODO:SELECT PROPERLY
+                            mode_o.fpu.rnd_mode   = float_round_mode_i;
                             mode_o.fpu.masked     = instr_masked;
                             mode_o.fpu.src_1_narrow = 1'b0;
                             mode_o.fpu.src_2_narrow = 1'b0;
@@ -1610,7 +1623,7 @@ module vproc_decoder #(
                             mode_o.fpu.op_mod     = 1'b1;
                             mode_o.fpu.op_rev     = 1'b1;
                             mode_o.fpu.op_reduction = 1'b0;
-                            mode_o.fpu.rnd_mode   = RNE;//TODO:SELECT PROPERLY
+                            mode_o.fpu.rnd_mode   = float_round_mode_i;
                             mode_o.fpu.masked     = instr_masked;
                             mode_o.fpu.src_1_narrow = 1'b0;
                             mode_o.fpu.src_2_narrow = 1'b0;
@@ -1624,7 +1637,7 @@ module vproc_decoder #(
                             mode_o.fpu.op_mod     = 1'b1;
                             mode_o.fpu.op_rev     = 1'b1;
                             mode_o.fpu.op_reduction = 1'b0;
-                            mode_o.fpu.rnd_mode   = RNE;//TODO:SELECT PROPERLY
+                            mode_o.fpu.rnd_mode   = float_round_mode_i;
                             mode_o.fpu.masked     = instr_masked;
                             mode_o.fpu.src_1_narrow = 1'b0;
                             mode_o.fpu.src_2_narrow = 1'b0;
@@ -1638,7 +1651,7 @@ module vproc_decoder #(
                             mode_o.fpu.op_mod     = 1'b0;
                             mode_o.fpu.op_rev     = 1'b1;
                             mode_o.fpu.op_reduction = 1'b0;
-                            mode_o.fpu.rnd_mode   = RNE;//TODO:SELECT PROPERLY
+                            mode_o.fpu.rnd_mode   = float_round_mode_i;
                             mode_o.fpu.masked     = instr_masked;
                             mode_o.fpu.src_1_narrow = 1'b0;
                             mode_o.fpu.src_2_narrow = 1'b0;
@@ -1652,7 +1665,7 @@ module vproc_decoder #(
                             mode_o.fpu.op_mod     = 1'b0;
                             mode_o.fpu.op_rev     = 1'b0;
                             mode_o.fpu.op_reduction = 1'b0;
-                            mode_o.fpu.rnd_mode   = RNE;//TODO:SELECT PROPERLY
+                            mode_o.fpu.rnd_mode   = float_round_mode_i;
                             mode_o.fpu.masked     = instr_masked;
                             mode_o.fpu.src_1_narrow = 1'b0;
                             mode_o.fpu.src_2_narrow = 1'b0;
@@ -1666,7 +1679,7 @@ module vproc_decoder #(
                             mode_o.fpu.op_mod     = 1'b1;
                             mode_o.fpu.op_rev     = 1'b0;
                             mode_o.fpu.op_reduction = 1'b0;
-                            mode_o.fpu.rnd_mode   = RNE;//TODO:SELECT PROPERLY
+                            mode_o.fpu.rnd_mode   = float_round_mode_i;
                             mode_o.fpu.masked     = instr_masked;
                             mode_o.fpu.src_1_narrow = 1'b0;
                             mode_o.fpu.src_2_narrow = 1'b0;
@@ -1680,7 +1693,7 @@ module vproc_decoder #(
                             mode_o.fpu.op_mod     = 1'b1;
                             mode_o.fpu.op_rev     = 1'b0;
                             mode_o.fpu.op_reduction = 1'b0;
-                            mode_o.fpu.rnd_mode   = RNE;//TODO:SELECT PROPERLY
+                            mode_o.fpu.rnd_mode   = float_round_mode_i;
                             mode_o.fpu.masked     = instr_masked;
                             mode_o.fpu.src_1_narrow = 1'b0;
                             mode_o.fpu.src_2_narrow = 1'b0;
@@ -1693,7 +1706,7 @@ module vproc_decoder #(
                             mode_o.fpu.op_mod     = 1'b0;
                             mode_o.fpu.op_rev     = 1'b0;
                             mode_o.fpu.op_reduction = 1'b0;
-                            mode_o.fpu.rnd_mode   = RNE;//TODO:SELECT PROPERLY
+                            mode_o.fpu.rnd_mode   = float_round_mode_i;
                             mode_o.fpu.masked     = instr_masked;
                             mode_o.fpu.src_1_narrow = 1'b0;
                             mode_o.fpu.src_2_narrow = 1'b0;
@@ -1773,7 +1786,7 @@ module vproc_decoder #(
                             mode_o.fpu.op         = CLASSIFY; //vfclass.v //TODO:condition based on vs1 for selection between FUNARY1 OPS
                             mode_o.fpu.op_mod     = 1'b0;
                             mode_o.fpu.op_rev     = 1'b0;
-                            mode_o.fpu.rnd_mode   = RNE;//TODO:SELECT PROPERLY
+                            mode_o.fpu.rnd_mode   = float_round_mode_i;
                             mode_o.fpu.masked     = instr_masked;
                             mode_o.fpu.src_1_narrow = 1'b0;
                             mode_o.fpu.src_2_narrow = 1'b0;
@@ -1803,19 +1816,41 @@ module vproc_decoder #(
                             mode_o.sld.masked = instr_masked;
                         end
 
-                        {6'b010111, 3'b101}: begin  // vmv/vmerge VF
-                            unit_o              = UNIT_ALU;
-                            mode_o.alu.opx2.res = instr_masked ? ALU_VSEL : ALU_VSELN;
-                            mode_o.alu.opx1.sel = ALU_SEL_MASK;
-                            mode_o.alu.shift_op = 1'b0;
-                            mode_o.alu.inv_op1  = 1'b1;
-                            mode_o.alu.inv_op2  = 1'b0;
-                            mode_o.alu.sat_res  = 1'b0;
-                            mode_o.alu.op_mask  = instr_masked ? ALU_MASK_SEL : ALU_MASK_NONE;
-                            mode_o.alu.cmp      = 1'b0;
-                            if (~instr_masked) begin
-                                rs2_o.vreg      = 1'b0;
-                            end
+                        {6'b010111, 3'b101}: begin  // vfmv/vfmerge VF
+                           unit_o              = UNIT_ALU;
+                           mode_o.alu.opx2.res = instr_masked ? ALU_VSEL : ALU_VSELN;
+                           mode_o.alu.opx1.sel = ALU_SEL_MASK;
+                           mode_o.alu.shift_op = 1'b0;
+                           mode_o.alu.inv_op1  = 1'b1;
+                           mode_o.alu.inv_op2  = 1'b0;
+                           mode_o.alu.sat_res  = 1'b0;
+                           mode_o.alu.op_mask  = instr_masked ? ALU_MASK_SEL : ALU_MASK_NONE;
+                           mode_o.alu.cmp      = 1'b0;
+                           if (~instr_masked) begin
+                               rs2_o.vreg      = 1'b0;
+                           end
+                        end
+
+                        {6'b010000, 3'b001}: begin  // VWXUNARY0
+                            unit_o = UNIT_ELEM;
+                            unique case (instr_i[19:15])
+                                5'b00000: begin
+                                            mode_o.elem.op = ELEM_XMV;    // vfmv.f.s
+                                            `ifndef OLD_VICUNA
+                                            evl_pol             = EVL_1;
+                                            `endif
+                                        end
+                                default:  instr_illegal  = 1'b1;
+                            endcase
+                            mode_o.elem.xreg   = 1'b1;
+                            mode_o.elem.freg   = 1'b1;
+                            mode_o.elem.masked = instr_masked;
+                            rs1_o.vreg         = 1'b0;
+                            rd_o.vreg          = 1'b0;
+
+                            fpr_wr_req_valid = 1'b1;
+                            fpr_wr_req_addr_o = instr_vd;
+                            
                         end
 
 
@@ -1832,7 +1867,7 @@ module vproc_decoder #(
                             mode_o.fpu.op         = ADD;
                             mode_o.fpu.op_mod     = 1'b0;
                             mode_o.fpu.op_rev     = 1'b0;
-                            mode_o.fpu.rnd_mode   = RNE;//TODO:SELECT PROPERLY
+                            mode_o.fpu.rnd_mode   = float_round_mode_i;
                             mode_o.fpu.masked     = instr_masked;
                             mode_o.fpu.src_1_narrow = 1'b1;
                             mode_o.fpu.src_2_narrow = 1'b1;
@@ -1844,7 +1879,7 @@ module vproc_decoder #(
                             //mode_o.fpu.op         = ;
                             mode_o.fpu.op_mod     = 1'b0;
                             mode_o.fpu.op_rev     = 1'b0;
-                            mode_o.fpu.rnd_mode   = RNE;//TODO:SELECT PROPERLY
+                            mode_o.fpu.rnd_mode   = float_round_mode_i;
                             mode_o.fpu.masked     = instr_masked;
                             mode_o.fpu.src_1_narrow = 1'b1;
                             mode_o.fpu.src_2_narrow = 1'b1;
@@ -1857,7 +1892,7 @@ module vproc_decoder #(
                             mode_o.fpu.op         = ADD;
                             mode_o.fpu.op_mod     = 1'b1;
                             mode_o.fpu.op_rev     = 1'b0;
-                            mode_o.fpu.rnd_mode   = RNE;//TODO:SELECT PROPERLY
+                            mode_o.fpu.rnd_mode   = float_round_mode_i;
                             mode_o.fpu.masked     = instr_masked;
                             mode_o.fpu.src_1_narrow = 1'b1;
                             mode_o.fpu.src_2_narrow = 1'b1;
@@ -1869,7 +1904,7 @@ module vproc_decoder #(
                             //mode_o.fpu.op         = ;
                             mode_o.fpu.op_mod     = 1'b0;
                             mode_o.fpu.op_rev     = 1'b0;
-                            mode_o.fpu.rnd_mode   = RNE;//TODO:SELECT PROPERLY
+                            mode_o.fpu.rnd_mode   = float_round_mode_i;
                             mode_o.fpu.masked     = instr_masked;
                             mode_o.fpu.src_1_narrow = 1'b1;
                             mode_o.fpu.src_2_narrow = 1'b1;
@@ -1882,7 +1917,7 @@ module vproc_decoder #(
                             mode_o.fpu.op         = ADD;
                             mode_o.fpu.op_mod     = 1'b1;
                             mode_o.fpu.op_rev     = 1'b0;
-                            mode_o.fpu.rnd_mode   = RNE;//TODO:SELECT PROPERLY
+                            mode_o.fpu.rnd_mode   = float_round_mode_i;
                             mode_o.fpu.masked     = instr_masked;
                             mode_o.fpu.src_1_narrow = 1'b1;
                             mode_o.fpu.src_2_narrow = 1'b1;
@@ -1895,7 +1930,7 @@ module vproc_decoder #(
                             mode_o.fpu.op         = ADD;
                             mode_o.fpu.op_mod     = 1'b1;
                             mode_o.fpu.op_rev     = 1'b0;
-                            mode_o.fpu.rnd_mode   = RNE;//TODO:SELECT PROPERLY
+                            mode_o.fpu.rnd_mode   = float_round_mode_i;
                             mode_o.fpu.masked     = instr_masked;
                             mode_o.fpu.src_1_narrow = 1'b1;
                             mode_o.fpu.src_2_narrow = 1'b1;
@@ -1908,7 +1943,7 @@ module vproc_decoder #(
                             //mode_o.fpu.op         = ;
                             mode_o.fpu.op_mod     = 1'b1;
                             mode_o.fpu.op_rev     = 1'b0;
-                            mode_o.fpu.rnd_mode   = RNE;//TODO:SELECT PROPERLY
+                            mode_o.fpu.rnd_mode   = float_round_mode_i;
                             mode_o.fpu.masked     = instr_masked;
                             mode_o.fpu.src_1_narrow = 1'b1;
                             mode_o.fpu.src_2_narrow = 1'b1;
@@ -1921,7 +1956,7 @@ module vproc_decoder #(
                             //mode_o.fpu.op         = ;
                             mode_o.fpu.op_mod     = 1'b1;
                             mode_o.fpu.op_rev     = 1'b0;
-                            mode_o.fpu.rnd_mode   = RNE;//TODO:SELECT PROPERLY
+                            mode_o.fpu.rnd_mode   = float_round_mode_i;
                             mode_o.fpu.masked     = instr_masked;
                             mode_o.fpu.src_1_narrow = 1'b1;
                             mode_o.fpu.src_2_narrow = 1'b1;
@@ -1934,7 +1969,7 @@ module vproc_decoder #(
                             //mode_o.fpu.op         = ;
                             mode_o.fpu.op_mod     = 1'b1;
                             mode_o.fpu.op_rev     = 1'b0;
-                            mode_o.fpu.rnd_mode   = RNE;//TODO:SELECT PROPERLY
+                            mode_o.fpu.rnd_mode   = float_round_mode_i;
                             mode_o.fpu.masked     = instr_masked;
                             mode_o.fpu.src_1_narrow = 1'b1;
                             mode_o.fpu.src_2_narrow = 1'b1;
@@ -1947,7 +1982,7 @@ module vproc_decoder #(
                             mode_o.fpu.op         = ADD;
                             mode_o.fpu.op_mod     = 1'b1;
                             mode_o.fpu.op_rev     = 1'b0;
-                            mode_o.fpu.rnd_mode   = RNE;//TODO:SELECT PROPERLY
+                            mode_o.fpu.rnd_mode   = float_round_mode_i;
                             mode_o.fpu.masked     = instr_masked;
                             mode_o.fpu.src_1_narrow = 1'b1;
                             mode_o.fpu.src_2_narrow = 1'b1;
@@ -1960,7 +1995,7 @@ module vproc_decoder #(
                             mode_o.fpu.op         = ADD;
                             mode_o.fpu.op_mod     = 1'b1;
                             mode_o.fpu.op_rev     = 1'b0;
-                            mode_o.fpu.rnd_mode   = RNE;//TODO:SELECT PROPERLY
+                            mode_o.fpu.rnd_mode   = float_round_mode_i;
                             mode_o.fpu.masked     = instr_masked;
                             mode_o.fpu.src_1_narrow = 1'b1;
                             mode_o.fpu.src_2_narrow = 1'b1;
@@ -2086,7 +2121,7 @@ module vproc_decoder #(
                             unit_o = UNIT_ELEM;
                             unique case (instr_i[19:15])
                                 5'b00000: begin
-                                            mode_o.elem.op = ELEM_XMV;    // vmv.x.s
+                                            mode_o.elem.op = ELEM_XMV;    // vmv.x.s //my instr is analogue of this one
                                             `ifndef OLD_VICUNA
                                             evl_pol             = EVL_1;
                                             `endif
@@ -2125,7 +2160,7 @@ module vproc_decoder #(
                                 mode_o.elem.op     = instr_vs1[0] ? ELEM_VID : ELEM_VIOTA;
                                 mode_o.elem.xreg   = 1'b0;
                                 mode_o.elem.masked = instr_masked;
-                                instr_illegal      = instr_vs1[3:1] != 3'b000;
+                                instr_illegal      = instr_vs1[3:1] != 3'b000; //Potential issue
                                 rs1_o.vreg         = 1'b0;
                                 rs2_o.vreg         = ~instr_vs1[0]; // vid has no source reg
                             end

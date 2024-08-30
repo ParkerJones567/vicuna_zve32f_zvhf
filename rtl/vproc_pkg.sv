@@ -299,6 +299,9 @@ typedef struct packed {
     opcode_elem op;
     logic       sigext;
     logic       xreg;
+    `ifdef VICUNA_F_ON
+    logic       freg;
+    `endif
 `ifdef VPROC_OP_MODE_UNION
     logic [5:0] unused;
 `endif

@@ -63,6 +63,15 @@ module vproc_core import vproc_pkg::*; #(
         input  logic                     csr_vxsat_i,
         input  logic                     csr_vxsat_set_i,
 
+        `ifdef VICUNA_F_ON
+        output logic fpr_wr_req_valid,
+        output logic [4:0] fpr_wr_req_addr_o,
+
+        output  logic fpr_res_valid,
+
+        input fpnew_pkg::roundmode_e float_round_mode_i,
+        `endif
+
         output logic [31:0]              pend_vreg_wr_map_o
     );
 
@@ -312,6 +321,11 @@ module vproc_core import vproc_pkg::*; #(
         .lmul_i             ( lmul_q                              ),
         .vxrm_i             ( vxrm_q                              ),
         .vl_i               ( vl_q                                ),
+        `ifdef VICUNA_F_ON
+        .fpr_wr_req_valid   ( fpr_wr_req_valid                    ),
+        .fpr_wr_req_addr_o  ( fpr_wr_req_addr_o                   ),
+        .float_round_mode_i ( float_round_mode_i                  ),
+        `endif
         .valid_o            ( dec_valid                           ),
         .vsew_o             ( dec_data_d.vsew                     ),
         .emul_o             ( dec_data_d.emul                     ),
@@ -919,6 +933,11 @@ module vproc_core import vproc_pkg::*; #(
     logic [4:0]          elem_xreg_addr;
     logic [31:0]         elem_xreg_data;
 
+    `ifdef VICUNA_F_ON
+    logic                elem_freg;
+
+    `endif
+
     generate
         for (genvar i = 0; i < PIPE_CNT; i++) begin
 `ifndef VERILATOR
@@ -958,6 +977,9 @@ module vproc_core import vproc_pkg::*; #(
             logic [XIF_ID_W-1:0] xreg_id;
             logic [4:0]          xreg_addr;
             logic [31:0]         xreg_data;
+            `ifdef VICUNA_F_ON
+            logic freg_res;
+            `endif
 
             vproc_pipeline_wrapper #(
                 .VREG_W                   ( VREG_W                     ),
@@ -1018,6 +1040,9 @@ module vproc_core import vproc_pkg::*; #(
                 .trans_complete_id_o      ( trans_complete_id          ),
                 .trans_complete_exc_o     ( trans_complete_exc         ),
                 .trans_complete_exccode_o ( trans_complete_exccode     ),
+                `ifdef VICUNA_F_ON
+                .freg_res                 ( freg_res                   ),
+                `endif
                 .xreg_valid_o             ( xreg_valid                 ),
                 .xreg_ready_i             ( xreg_ready                 ),
                 .xreg_id_o                ( xreg_id                    ),
@@ -1057,6 +1082,9 @@ module vproc_core import vproc_pkg::*; #(
                 assign elem_xreg_id    = xreg_id;
                 assign elem_xreg_addr  = xreg_addr;
                 assign elem_xreg_data  = xreg_data;
+                `ifdef VICUNA_F_ON
+                assign elem_freg = freg_res;
+                `endif
             end
 
         end
@@ -1111,6 +1139,10 @@ module vproc_core import vproc_pkg::*; #(
         .result_xreg_id_i          ( elem_xreg_id               ),
         .result_xreg_addr_i        ( elem_xreg_addr             ),
         .result_xreg_data_i        ( elem_xreg_data             ),
+        `ifdef VICUNA_F_ON
+        .result_freg_i             ( elem_freg                  ),
+        .result_freg_o             ( fpr_res_valid              ),
+        `endif
         .result_csr_valid_i        ( result_csr_valid           ),
         .result_csr_ready_o        ( result_csr_ready           ),
         .result_csr_id_i           ( result_csr_id              ),

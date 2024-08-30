@@ -465,6 +465,13 @@ module vproc_top import vproc_pkg::*; #(
         .csr_vxsat_o        ( csr_vxsat_rd       ),
         .csr_vxsat_i        ( csr_vxsat_wr       ),
         .csr_vxsat_set_i    ( csr_vxsat_wren     ),
+        `ifdef VICUNA_F_ON
+        .fpr_wr_req_valid   ( fpr_wr_req_valid   ),
+        .fpr_wr_req_addr_o  ( fpr_wr_req_addr    ),
+        .fpr_res_valid      ( fpr_wr_resp_valid  ),
+        .float_round_mode_i ( float_round_mode   ),
+
+        `endif
 
         .pend_vreg_wr_map_o ( pend_vreg_wr_map_o )
     );
@@ -504,6 +511,13 @@ module vproc_top import vproc_pkg::*; #(
     logic [ 4:0] fp_raddr;
     logic [31:0] fp_rdata; 
 
+    logic fpr_wr_req_valid;
+    logic [4:0] fpr_wr_req_addr;
+
+    logic fpr_wr_resp_valid;
+
+    fpnew_pkg::roundmode_e float_round_mode;
+
     `endif
 
 
@@ -533,6 +547,14 @@ module vproc_top import vproc_pkg::*; #(
         .vicuna_rd_scoreboard_o(fp_scoreboard),
         .vicuna_raddr_i(fp_raddr),
         .vicuna_rdata_o(fp_rdata),
+
+        .vicuna_fpr_wr_req_valid(fpr_wr_req_valid),
+        .vicuna_fpr_wr_req_addr_i(fpr_wr_req_addr),
+
+        .vicuna_fpr_res_valid(fpr_wr_resp_valid),
+        .vicuna_fpr_res_addr_i(vcore_xif.result.rd),
+        .vicuna_fpr_wb_data_i(vcore_xif.result.data),
+        .float_round_mode_o ( float_round_mode ),  
 
         `endif
 
@@ -602,28 +624,26 @@ module vproc_top import vproc_pkg::*; #(
     assign host_xif.result.err     = fpu_ss_xif.result.err;                 
     assign host_xif.result.dbg     = fpu_ss_xif.result.dbg;                 
 
-    if (USE_XIF_MEM) begin
-        assign host_xif.mem_valid          = fpu_ss_xif.mem_valid;
-        assign fpu_ss_xif.mem_ready        = host_xif.mem_ready;             
-        assign host_xif.mem_req.id         = fpu_ss_xif.mem_req.id;          
-        assign host_xif.mem_req.addr       = fpu_ss_xif.mem_req.addr;        
-        assign host_xif.mem_req.mode       = fpu_ss_xif.mem_req.mode;        
-        assign host_xif.mem_req.we         = fpu_ss_xif.mem_req.we;          
-        assign host_xif.mem_req.size       = fpu_ss_xif.mem_req.size;        
-        assign host_xif.mem_req.be         = fpu_ss_xif.mem_req.be;          
-        assign host_xif.mem_req.attr       = fpu_ss_xif.mem_req.attr;        
-        assign host_xif.mem_req.wdata      = fpu_ss_xif.mem_req.wdata;       
-        assign host_xif.mem_req.last       = fpu_ss_xif.mem_req.last;        
-        assign host_xif.mem_req.spec       = fpu_ss_xif.mem_req.spec;        
-        assign fpu_ss_xif.mem_resp.exc     = host_xif.mem_resp.exc;          
-        assign fpu_ss_xif.mem_resp.exccode = host_xif.mem_resp.exccode;      
-        assign fpu_ss_xif.mem_resp.dbg     = host_xif.mem_resp.dbg;          
-        assign fpu_ss_xif.mem_result_valid = host_xif.mem_result_valid;      
-        assign fpu_ss_xif.mem_result.id    = host_xif.mem_result.id;         
-        assign fpu_ss_xif.mem_result.rdata = host_xif.mem_result.rdata;      
-        assign fpu_ss_xif.mem_result.err   = host_xif.mem_result.err;        
-        assign fpu_ss_xif.mem_result.dbg   = host_xif.mem_result.dbg;        
-    end
+    assign host_xif.mem_valid          = fpu_ss_xif.mem_valid;
+    assign fpu_ss_xif.mem_ready        = host_xif.mem_ready;             
+    assign host_xif.mem_req.id         = fpu_ss_xif.mem_req.id;          
+    assign host_xif.mem_req.addr       = fpu_ss_xif.mem_req.addr;        
+    assign host_xif.mem_req.mode       = fpu_ss_xif.mem_req.mode;        
+    assign host_xif.mem_req.we         = fpu_ss_xif.mem_req.we;          
+    assign host_xif.mem_req.size       = fpu_ss_xif.mem_req.size;        
+    assign host_xif.mem_req.be         = fpu_ss_xif.mem_req.be;          
+    assign host_xif.mem_req.attr       = fpu_ss_xif.mem_req.attr;        
+    assign host_xif.mem_req.wdata      = fpu_ss_xif.mem_req.wdata;       
+    assign host_xif.mem_req.last       = fpu_ss_xif.mem_req.last;        
+    assign host_xif.mem_req.spec       = fpu_ss_xif.mem_req.spec;        
+    assign fpu_ss_xif.mem_resp.exc     = host_xif.mem_resp.exc;          
+    assign fpu_ss_xif.mem_resp.exccode = host_xif.mem_resp.exccode;      
+    assign fpu_ss_xif.mem_resp.dbg     = host_xif.mem_resp.dbg;          
+    assign fpu_ss_xif.mem_result_valid = host_xif.mem_result_valid;      
+    assign fpu_ss_xif.mem_result.id    = host_xif.mem_result.id;         
+    assign fpu_ss_xif.mem_result.rdata = host_xif.mem_result.rdata;      
+    assign fpu_ss_xif.mem_result.err   = host_xif.mem_result.err;        
+    assign fpu_ss_xif.mem_result.dbg   = host_xif.mem_result.dbg;        
     `endif
 
 `endif
@@ -716,10 +736,25 @@ module vproc_top import vproc_pkg::*; #(
     assign host_xif.result_valid   = fpu_ss_xif.result_valid | vcore_xif.result_valid;                    // Arbitrate: Valid when either unit has valid data.  Core will be waiting for one result at a time
     assign fpu_ss_xif.result_ready = host_xif.result_ready;                 //Broadcast from host
     assign vcore_xif.result_ready = host_xif.result_ready;                 //Broadcast from host
-    assign host_xif.result.id      = fpu_ss_xif.result.id | vcore_xif.result.id;                       // Arbitrate: each unit outputs 0 if not responding.  correct output is OR of both 
-    assign host_xif.result.data    = fpu_ss_xif.result.data | vcore_xif.result.data;                       
-    assign host_xif.result.rd      = fpu_ss_xif.result.rd | vcore_xif.result.rd;                       
-    assign host_xif.result.we      = fpu_ss_xif.result.we | vcore_xif.result.we;                       
+    assign host_xif.result.id      = fpu_ss_xif.result.id | vcore_xif.result.id;                       
+ 
+    
+    // In the event that a vector instruction writes to the fp regfile, need to extract the reg address and data to send to the fpregfile
+    // Also need to prevent writing to any registers in the main core.
+    always_comb begin
+        host_xif.result.data    = fpu_ss_xif.result.data | vcore_xif.result.data;                       
+        host_xif.result.rd      = fpu_ss_xif.result.rd | vcore_xif.result.rd;                       
+        host_xif.result.we      = fpu_ss_xif.result.we | vcore_xif.result.we;
+        if (fpr_wr_resp_valid) begin
+            host_xif.result.data    = '0;                       
+            host_xif.result.rd      = '0;                   
+            host_xif.result.we      = '0;
+        end
+
+    end                                                                                                 
+    
+
+
     assign host_xif.result.exc     = fpu_ss_xif.result.exc | vcore_xif.result.exc;                      
     assign host_xif.result.exccode = fpu_ss_xif.result.exccode | vcore_xif.result.exccode;                  
     assign host_xif.result.err     = fpu_ss_xif.result.err | vcore_xif.result.err;                    
@@ -938,6 +973,8 @@ module vproc_top import vproc_pkg::*; #(
     logic             imem_rvalid;
     logic [MEM_W-1:0] imem_rdata;
     logic             imem_err;
+    logic             i_miss /* verilator public */;
+    logic             i_hit  /* verilator public */;
     generate
         if (ICACHE_SZ != 0) begin
             localparam int unsigned ICACHE_WAY_LEN = ICACHE_SZ / (ICACHE_LINE_W / 8) / 2;
@@ -968,7 +1005,9 @@ module vproc_top import vproc_pkg::*; #(
                 .mem_gnt_i    ( imem_gnt          ),
                 .mem_rvalid_i ( imem_rvalid       ),
                 .mem_rdata_i  ( imem_rdata        ),
-                .mem_err_i    ( imem_err          )
+                .mem_err_i    ( imem_err          ),
+                .cache_hit_o  ( i_hit             ),
+                .cache_miss_o ( i_miss            )
             );
         end else begin
             assign imem_req     = instr_req;
@@ -977,6 +1016,8 @@ module vproc_top import vproc_pkg::*; #(
             assign instr_rvalid = imem_rvalid;
             assign instr_rdata  = imem_rdata[31:0];
             assign instr_err    = imem_err;
+            assign i_miss       = 0;
+            assign i_hit        = 0;
         end
     endgenerate
 
@@ -991,6 +1032,8 @@ module vproc_top import vproc_pkg::*; #(
     logic               dmem_wvalid;
     logic [MEM_W  -1:0] dmem_rdata;
     logic               dmem_err;
+    logic               d_miss /* verilator public */;
+    logic               d_hit  /* verilator public */;
     generate
         if (DCACHE_SZ != 0) begin
             localparam int unsigned DCACHE_WAY_LEN = DCACHE_SZ / (DCACHE_LINE_W / 8) / 2;
@@ -1027,7 +1070,9 @@ module vproc_top import vproc_pkg::*; #(
                 .mem_gnt_i    ( dmem_gnt          ),
                 .mem_rvalid_i ( dmem_rvalid       ),
                 .mem_rdata_i  ( dmem_rdata        ),
-                .mem_err_i    ( dmem_err          )
+                .mem_err_i    ( dmem_err          ),
+                .cache_hit_o  ( d_hit             ),
+                .cache_miss_o ( d_miss            )
             );
             assign dmem_be = '1;
         end else begin
@@ -1046,6 +1091,8 @@ module vproc_top import vproc_pkg::*; #(
             assign data_rvalid = dmem_rvalid | dmem_wvalid;
             assign data_rdata  = dmem_rdata;
             assign data_err    = dmem_err;
+            assign d_miss       = 0;
+            assign d_hit        = 0;
         end
     endgenerate
 

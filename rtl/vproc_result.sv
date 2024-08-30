@@ -26,6 +26,11 @@ module vproc_result #(
         input  logic [4:0]          result_xreg_addr_i,
         input  logic [31:0]         result_xreg_data_i,
 
+        `ifdef VICUNA_F_ON
+        input  logic                result_freg_i,
+        output logic                result_freg_o,
+        `endif
+
         input  logic                result_csr_valid_i,
         output logic                result_csr_ready_o,
         input  logic [XIF_ID_W-1:0] result_csr_id_i,
@@ -189,6 +194,10 @@ module vproc_result #(
     assign result_lsu_ready_o  =  (result_source == RESULT_SOURCE_LSU    ) & xif_result_if.result_ready;
     assign result_xreg_ready_o =  (result_source == RESULT_SOURCE_XREG   ) & xif_result_if.result_ready;
     assign result_csr_ready_o  = ((result_source == RESULT_SOURCE_CSR_BUF) & xif_result_if.result_ready) | ~result_csr_valid_q;
+
+    `ifdef VICUNA_F_ON
+    assign result_freg_o = result_xreg_ready_o & result_freg_i;
+    `endif
 
     always_comb begin
         xif_result_if.result_valid   = '0;
