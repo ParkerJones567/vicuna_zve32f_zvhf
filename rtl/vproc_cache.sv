@@ -36,7 +36,11 @@ module vproc_cache #(
         input  logic                    mem_gnt_i,
         input  logic                    mem_rvalid_i,
         input  logic [MEM_BYTE_W*8-1:0] mem_rdata_i,
-        input  logic                    mem_err_i
+        input  logic                    mem_err_i,
+
+        //Signals for Vicuna system statistics
+        output logic                    cache_hit_o,
+        output logic                    cache_miss_o
     );
 
     // number of memory requests required to fill or spill a cache line:
@@ -185,8 +189,9 @@ module vproc_cache #(
     assign tag_match_line = tag_match_way0 ? way0_rline : way1_rline;
     assign tag_match_err  = tag_match_way0 ? way0_rerr  : way1_rerr;
 
-    logic  cache_hit /* verilator public */;
-    logic  cache_miss /* verilator public */; 
+    logic  cache_hit, cache_miss; 
+    assign cache_hit_o = cache_hit;
+    assign cache_miss_o = cache_miss;
     logic cache_spill;
     logic [TAG_BIT_W-1:0]     spill_tag;
     logic [LINE_BYTE_W*8-1:0] spill_line;
