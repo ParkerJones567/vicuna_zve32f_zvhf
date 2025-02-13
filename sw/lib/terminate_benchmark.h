@@ -23,14 +23,19 @@
 extern "C" {
 #endif
 
-//#include <stdlib.h>
-
+#include <stdint.h>
 
 void benchmark_success();
 
 void benchmark_failure();
 
 void start_cycle_count();
+
+void store_result_float(float result);
+
+void store_result_half_float(_Float16 result);
+
+void store_result_int(uint32_t result);
 
 #ifdef __cplusplus
 }
