@@ -25,7 +25,7 @@ module vproc_decoder #(
         `ifdef VICUNA_F_ON
         output logic fpr_wr_req_valid,
         output logic [4:0] fpr_wr_req_addr_o,
-        input fpnew_pkg::roundmode_e float_round_mode_i,
+        input vproc_pkg::fpu_roundmode_e float_round_mode_i,
         `endif
 
         output logic                    valid_o,
@@ -59,6 +59,8 @@ module vproc_decoder #(
     logic [CFG_VL_W-1:0]     vl; //vector length for EMUL override
     evl_policy evl_pol;
 
+    logic misaligned_ls /* verilator public */;
+
     always_comb begin
         instr_illegal = 1'b0;
         emul_override = 1'b0;
@@ -88,6 +90,8 @@ module vproc_decoder #(
 
         fpr_wr_req_valid = DONT_CARE_ZERO ? 1'b0 : 1'bx;
         fpr_wr_req_addr_o = DONT_CARE_ZERO ? '0 : 'x;
+
+        misaligned_ls = 1'b0;
 
         `endif
 
@@ -194,6 +198,7 @@ module vproc_decoder #(
                         // of unit-strided loads/stores is aligned to the width of the memory
                         // interface, but the base address in rs1 is not
                         if (ALIGNED_UNITSTRIDE & (x_rs1_i[$clog2(XIF_MEM_W/8)-1:0] != '0)) begin
+                            misaligned_ls = 1'b1;
                             mode_o.lsu.stride = LSU_STRIDED;
                             unique case (instr_i[14:12]) // width field
                                 3'b000: rs2_o.r.xval = 32'h1; // EEW 8
@@ -1831,7 +1836,7 @@ module vproc_decoder #(
                            end
                         end
 
-                        {6'b010000, 3'b001}: begin  // VWXUNARY0
+                        {6'b010000, 3'b001}: begin  // VWFUNARY0
                             unit_o = UNIT_ELEM;
                             unique case (instr_i[19:15])
                                 5'b00000: begin
@@ -1851,6 +1856,26 @@ module vproc_decoder #(
                             fpr_wr_req_valid = 1'b1;
                             fpr_wr_req_addr_o = instr_vd;
                             
+                        end
+                        
+                        {6'b010000, 3'b101}: begin  // VRFUNARY0
+                            unique case (instr_i[24:20])
+                                5'b00000: begin     // vmv.s.f
+                                    unit_o              = UNIT_ALU;
+                                    mode_o.alu.opx2.res = ALU_VSELN;
+                                    mode_o.alu.opx1.sel = ALU_SEL_MASK;
+                                    mode_o.alu.shift_op = 1'b0;
+                                    mode_o.alu.inv_op1  = 1'b1;
+                                    mode_o.alu.inv_op2  = 1'b0;
+                                    mode_o.alu.sat_res  = 1'b0;
+                                    mode_o.alu.op_mask  = ALU_MASK_NONE;
+                                    mode_o.alu.cmp      = 1'b0;
+                                    evl_pol             = EVL_1;
+                                end
+                                default: begin
+                                    instr_illegal = 1'b1;
+                                end
+                            endcase
                         end
 
 
@@ -2121,7 +2146,7 @@ module vproc_decoder #(
                             unit_o = UNIT_ELEM;
                             unique case (instr_i[19:15])
                                 5'b00000: begin
-                                            mode_o.elem.op = ELEM_XMV;    // vmv.x.s //my instr is analogue of this one
+                                            mode_o.elem.op = ELEM_XMV;    // vmv.x.s 
                                             `ifndef OLD_VICUNA
                                             evl_pol             = EVL_1;
                                             `endif

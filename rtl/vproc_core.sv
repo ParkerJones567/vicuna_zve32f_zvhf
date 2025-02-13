@@ -70,6 +70,10 @@ module vproc_core import vproc_pkg::*; #(
         output  logic fpr_res_valid,
 
         input fpnew_pkg::roundmode_e float_round_mode_i,
+
+        input logic fpu_res_acc,
+        input logic[XIF_ID_W-1:0] fpu_res_id,
+
         `endif
 
         output logic [31:0]              pend_vreg_wr_map_o
@@ -1142,6 +1146,8 @@ module vproc_core import vproc_pkg::*; #(
         `ifdef VICUNA_F_ON
         .result_freg_i             ( elem_freg                  ),
         .result_freg_o             ( fpr_res_valid              ),
+        .fpu_res_acc               ( fpu_res_acc                ),
+        .fpu_res_id                ( fpu_res_id                 ),
         `endif
         .result_csr_valid_i        ( result_csr_valid           ),
         .result_csr_ready_o        ( result_csr_ready           ),

@@ -105,7 +105,7 @@ module vproc_div #(
     //Shifts + sign extensions for inputs
     always_comb begin
         //if counter == 00 (meaning SEW==32 or all data finished) pass through from inputs
-        if (shift_counter_next == 0'b00) begin
+        if (shift_counter_next == 2'b00) begin
             opa_i_d = pipe_in_op2_i;
             opb_i_d = pipe_in_op1_i;
             unit_ctrl_d = pipe_in_ctrl_i;

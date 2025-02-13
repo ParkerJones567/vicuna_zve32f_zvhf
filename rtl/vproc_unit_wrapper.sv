@@ -519,6 +519,7 @@ module vproc_unit_wrapper import vproc_pkg::*; #(
             logic [MAX_OP_W  -1:0] unit_out_res;
             logic [MAX_OP_W/8-1:0] unit_out_mask;
             logic                  unit_out_valid;
+            logic        unit_out_ready;
             
             vproc_fpu #(
                 .FPU_OP_W         ( MAX_OP_W                                    ),
