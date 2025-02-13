@@ -29,6 +29,10 @@ module vproc_result #(
         `ifdef VICUNA_F_ON
         input  logic                result_freg_i,
         output logic                result_freg_o,
+
+        input logic                 fpu_res_acc,
+        input logic [XIF_ID_W-1:0]  fpu_res_id,
+
         `endif
 
         input  logic                result_csr_valid_i,
@@ -75,6 +79,21 @@ module vproc_result #(
         result_csr_delayed_q <= result_csr_delayed_d;
         result_csr_data_q    <= result_csr_data_d;
     end
+
+    logic [XIF_ID_W-1:0] next_id_q, next_id_d;
+    always_ff @(posedge clk_i or negedge async_rst_ni) begin : vproc_next_result_id
+        if (~async_rst_ni) begin
+            next_id_q <= '0;
+        end
+        else if (~sync_rst_ni) begin
+            next_id_q <= '0;
+        end
+        else begin
+            next_id_q <= next_id_d;
+        end
+    end
+
+
 
     typedef enum logic [2:0] {
         RESULT_SOURCE_EMPTY,
@@ -128,7 +147,7 @@ module vproc_result #(
             result_source = RESULT_SOURCE_EMPTY;
         end
 
-        // select the lowest instruction ID for which an empty result must be returned
+        // select the lowest instruction ID for which an empty result must be returned //possible issue on overflow/wraparound to id 0
         for (int i = 0; i < XIF_ID_CNT; i++) begin
             if (instr_result_empty_q[i]) begin
                 result_empty_id = XIF_ID_W'(i);
@@ -170,15 +189,15 @@ module vproc_result #(
         end
 
         if (result_source == RESULT_SOURCE_EMPTY_BUF) begin
-            // clear the selected ID if the XIF interface is ready
-            instr_result_empty_d[result_empty_id] = ~xif_result_if.result_ready;
+            // clear the selected ID if the XIF interface is ready and instruction is next to be retired
+            instr_result_empty_d[result_empty_id] = ~(xif_result_if.result_ready &^ (result_empty_id == next_id_q));
         end
         if (result_source == RESULT_SOURCE_CSR_BUF) begin
-            result_csr_valid_d = ~xif_result_if.result_ready;
+            result_csr_valid_d = ~xif_result_if.result_ready || !(result_csr_id_q == next_id_q);
         end
 
-        // instr ID is added to buffer if another result takes precedence or XIF iface is not ready
-        if (result_empty_valid_i & ((result_source != RESULT_SOURCE_EMPTY) | ~xif_result_if.result_ready)) begin
+        // instr ID is added to buffer if another result takes precedence or XIF iface is not ready or current instruction is not the next one to be retired
+        if (result_empty_valid_i & ((result_source != RESULT_SOURCE_EMPTY) | ~xif_result_if.result_ready | result_empty_id_i != next_id_q)) begin
             instr_result_empty_d[result_empty_id_i] = 1'b1;
         end
         // CSR result is always buffered
@@ -195,9 +214,23 @@ module vproc_result #(
     assign result_xreg_ready_o =  (result_source == RESULT_SOURCE_XREG   ) & xif_result_if.result_ready;
     assign result_csr_ready_o  = ((result_source == RESULT_SOURCE_CSR_BUF) & xif_result_if.result_ready) | ~result_csr_valid_q;
 
+    logic fpu_res_accepted;
+
     `ifdef VICUNA_F_ON
     assign result_freg_o = result_xreg_ready_o & result_freg_i;
+    assign fpu_res_accepted = fpu_res_acc;
+    `else
+    assign fpu_res_accepted = 1'b0;
     `endif
+
+
+    always_comb begin
+        next_id_d = next_id_q;
+        if ((xif_result_if.result_valid && xif_result_if.result_ready) || fpu_res_accepted) begin
+            next_id_d = next_id_q + 1;
+        end
+    end
+
 
     always_comb begin
         xif_result_if.result_valid   = '0;
@@ -215,28 +248,33 @@ module vproc_result #(
 
         unique case (result_source)
             RESULT_SOURCE_EMPTY: begin
-                xif_result_if.result_valid = 1'b1;
+                xif_result_if.result_valid = result_empty_id_i == next_id_q; //only raise result valid if current instruction is the one the scalar core is waiting for (no out of order retiring)
+                //xif_result_if.result_valid = '1;
                 xif_result_if.result.id    = result_empty_id_i;
             end
             RESULT_SOURCE_EMPTY_BUF: begin
-                xif_result_if.result_valid = 1'b1;
+                xif_result_if.result_valid = result_empty_id == next_id_q;
+                //xif_result_if.result_valid = '1;
                 xif_result_if.result.id    = result_empty_id;
             end
             RESULT_SOURCE_LSU: begin
-                xif_result_if.result_valid   = 1'b1;
+                xif_result_if.result_valid   = result_lsu_id_i == next_id_q;
+                //xif_result_if.result_valid = '1;
                 xif_result_if.result.id      = result_lsu_id_i;
                 xif_result_if.result.exc     = result_lsu_exc_i;
                 xif_result_if.result.exccode = result_lsu_exccode_i;
             end
             RESULT_SOURCE_XREG: begin
-                xif_result_if.result_valid = 1'b1;
+                xif_result_if.result_valid = result_xreg_id_i == next_id_q;
+                //xif_result_if.result_valid = '1;
                 xif_result_if.result.id    = result_xreg_id_i;
                 xif_result_if.result.data  = result_xreg_data_i;
                 xif_result_if.result.rd    = result_xreg_addr_i;
                 xif_result_if.result.we    = 1'b1;
             end
             RESULT_SOURCE_CSR_BUF: begin
-                xif_result_if.result_valid = 1'b1;
+                xif_result_if.result_valid = result_csr_id_q == next_id_q;
+                //xif_result_if.result_valid = '1;
                 xif_result_if.result.id    = result_csr_id_q;
                 xif_result_if.result.data  = result_csr_delayed_q ? result_csr_data_delayed_i : result_csr_data_q;
                 xif_result_if.result.rd    = result_csr_addr_q;
