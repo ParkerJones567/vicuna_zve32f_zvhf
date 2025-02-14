@@ -25,7 +25,18 @@ module vproc_top import vproc_pkg::*; #(
         input  logic               mem_err_i,
         input  logic [MEM_W  -1:0] mem_rdata_i,
 
-        output logic [31:0]        pend_vreg_wr_map_o
+        output logic               data_read_o,
+
+        output logic [31:0]        pend_vreg_wr_map_o,
+
+        output logic               mem_ireq_o,
+        output logic [31:0]        mem_iaddr_o,
+        input  logic               mem_irvalid_i,
+        input  logic               mem_ierr_i,
+        input  logic [32  -1:0]    mem_irdata_i,
+
+        output logic               data_iread_o
+              
     );
 
     if ((MEM_W & (MEM_W - 1)) != 0 || MEM_W < 32) begin
@@ -86,6 +97,15 @@ module vproc_top import vproc_pkg::*; #(
     ) vcore_xif ();
     logic        vect_pending_load;
     logic        vect_pending_store;
+
+    //signals for calculating the avg VL.  Defined here in case vcore is not instantiated
+    logic        vcore_result_valid /* verilator public */;
+    logic        vcore_result_ready /* verilator public */;
+    assign vcore_result_valid = vcore_xif.result_valid;
+    assign vcore_result_ready = vcore_xif.result_ready;
+    logic [31:0] csr_vtype_o /* verilator public */;
+    logic [31:0] csr_vl_o /* verilator public */;
+    logic [31:0] csr_vlen_b_o /* verilator public */;
 
     // CSR register interface for Vector Unit
     localparam int unsigned VECT_CSR_CNT = 7;
@@ -228,7 +248,9 @@ module vproc_top import vproc_pkg::*; #(
 
 `else
 `ifdef MAIN_CORE_CV32E40X
-    localparam bit USE_XIF_MEM = VMEM_W == 32;
+    //localparam bit USE_XIF_MEM = VMEM_W == 32;
+    localparam bit USE_XIF_MEM = '0;
+
 
     
     `ifdef XIF_ON
@@ -289,6 +311,7 @@ module vproc_top import vproc_pkg::*; #(
         .xif_mem_if          ( host_xif      ),
         .xif_mem_result_if   ( host_xif      ),
         .xif_result_if       ( host_xif      ),
+        //.xif_result_id       ( host_xif.result.id     ),
         .irq_i               ( '0            ),
         .clic_irq_i          ( '0            ),
         .clic_irq_id_i       ( '0            ),
@@ -305,11 +328,54 @@ module vproc_top import vproc_pkg::*; #(
         .core_sleep_o        (               )
     );
 
+
+    //TEST SIGNALS TODO: REMOVE
+
+    logic issue_valid_test;
+    assign issue_valid_test = host_xif.issue_valid;
+    logic [31:0] issue_id_test;
+    assign issue_id_test = host_xif.issue_req.id;
+    logic issue_ready_test;
+    assign issue_ready_test = host_xif.issue_ready;
+    logic [31:0] issue_inst_test;
+    assign issue_inst_test = host_xif.issue_req.instr;
+
+    logic commit_valid_test;
+    assign commit_valid_test = host_xif.commit_valid;
+    logic [31:0] commit_id_test;
+    assign commit_id_test = host_xif.commit.id;
+
+    logic mem_req_valid_test;
+    assign mem_req_valid_test = host_xif.mem_valid;
+    logic mem_req_ready_test;
+    assign mem_req_ready_test = host_xif.mem_ready;
+    logic [31:0] mem_req_id_test;
+    assign mem_req_id_test = host_xif.mem_req.id;
+
+    logic mem_result_valid_test;
+    assign mem_result_valid_test = host_xif.mem_result_valid;
+    logic [31:0] mem_result_id_test;
+    assign mem_result_id_test = host_xif.mem_result.id;
+
+
+
+    logic [31:0] result_data;
+    logic [5:0] result_addr;
+    assign result_data = host_xif.result.data;
+    assign result_addr = host_xif.result.rd;
+    logic [31:0] result_id_test;
+    assign result_id_test = host_xif.result.id;
+    logic  result_valid_test;
+    assign result_valid_test = host_xif.result_valid;
+     logic  result_ready_test;
+    assign result_ready_test = host_xif.result_ready;
+
+
     //Report when an instruction is offloaded and accepted.  Valid instruction offloaded when issue_valid and issue_ready are both high
-    logic has_offloaded /* verilator public */;
-    assign has_offloaded = host_xif.issue_valid & host_xif.issue_ready;
-    logic [31:0] inst_offloaded /* verilator public */;
-    assign inst_offloaded = host_xif.issue_req.instr;
+    //logic has_offloaded /* verilator public */;
+    //assign has_offloaded = host_xif.issue_valid & host_xif.issue_ready;
+    //logic [31:0] inst_offloaded /* verilator public */;
+    //assign inst_offloaded = host_xif.issue_req.instr;
     
     `ifndef SCALAR_FPU_ON
     //CONNECTING VPROC_XIF to HOST_XIF.
@@ -382,8 +448,11 @@ module vproc_top import vproc_pkg::*; #(
 
     // Vector CSR read/write conversion
     logic [31:0] csr_vtype;
+    assign csr_vtype_o = csr_vtype;
     logic [31:0] csr_vl;
+    assign csr_vl_o = csr_vl;
     logic [31:0] csr_vlenb;
+    assign csr_vlen_b_o = csr_vlenb;
     logic [31:0] csr_vstart_rd;
     logic [31:0] csr_vstart_wr;
     logic        csr_vstart_wren;
@@ -470,6 +539,9 @@ module vproc_top import vproc_pkg::*; #(
         .fpr_wr_req_addr_o  ( fpr_wr_req_addr    ),
         .fpr_res_valid      ( fpr_wr_resp_valid  ),
         .float_round_mode_i ( float_round_mode   ),
+
+        .fpu_res_acc (fpu_ss_res_accepted),
+        .fpu_res_id (fpu_res_id),
 
         `endif
 
@@ -592,6 +664,7 @@ module vproc_top import vproc_pkg::*; #(
         .x_result_o           ( fpu_ss_xif.result )
     );
 
+
     //CONNECTING FPU_SS to HOST_XIF.
     `ifndef VICUNA_ON
 
@@ -624,6 +697,7 @@ module vproc_top import vproc_pkg::*; #(
     assign host_xif.result.err     = fpu_ss_xif.result.err;                 
     assign host_xif.result.dbg     = fpu_ss_xif.result.dbg;                 
 
+    
     assign host_xif.mem_valid          = fpu_ss_xif.mem_valid;
     assign fpu_ss_xif.mem_ready        = host_xif.mem_ready;             
     assign host_xif.mem_req.id         = fpu_ss_xif.mem_req.id;          
@@ -644,6 +718,7 @@ module vproc_top import vproc_pkg::*; #(
     assign fpu_ss_xif.mem_result.rdata = host_xif.mem_result.rdata;      
     assign fpu_ss_xif.mem_result.err   = host_xif.mem_result.err;        
     assign fpu_ss_xif.mem_result.dbg   = host_xif.mem_result.dbg;        
+    
     `endif
 
 `endif
@@ -736,11 +811,18 @@ module vproc_top import vproc_pkg::*; #(
     assign host_xif.result_valid   = fpu_ss_xif.result_valid | vcore_xif.result_valid;                    // Arbitrate: Valid when either unit has valid data.  Core will be waiting for one result at a time
     assign fpu_ss_xif.result_ready = host_xif.result_ready;                 //Broadcast from host
     assign vcore_xif.result_ready = host_xif.result_ready;                 //Broadcast from host
-    assign host_xif.result.id      = fpu_ss_xif.result.id | vcore_xif.result.id;                       
- 
+    assign host_xif.result.id      = fpu_ss_xif.result.id | vcore_xif.result.id; 
+
+    //vector unit needs to know when instructions offloaded to the fpu_ss are finished
+    logic fpu_ss_res_accepted;
+    logic [16-1:0] fpu_ss_id; //TODO Parametrize this with XIF_ID_W
+
+    assign fpu_ss_res_accepted = fpu_ss_xif.result_valid & host_xif.result_ready;
+    assign fpu_ss_id = fpu_ss_xif.result.id;
+     
     
-    // In the event that a vector instruction writes to the fp regfile, need to extract the reg address and data to send to the fpregfile
-    // Also need to prevent writing to any registers in the main core.
+    //In the event that a vector instruction writes to the fp regfile, need to extract the reg address and data to send to the fpregfile
+    //Also need to prevent writing to any registers in the main core.
     always_comb begin
         host_xif.result.data    = fpu_ss_xif.result.data | vcore_xif.result.data;                       
         host_xif.result.rd      = fpu_ss_xif.result.rd | vcore_xif.result.rd;                       
@@ -1100,59 +1182,128 @@ module vproc_top import vproc_pkg::*; #(
 
     ///////////////////////////////////////////////////////////////////////////
     // MEMORY ARBITER
-
-    always_comb begin
-        mem_req_o   = imem_req | dmem_req;
-        mem_addr_o  = imem_addr;
-        mem_we_o    = 1'b0;
-        mem_be_o    = dmem_be;
-        mem_wdata_o = dmem_wdata;
-        if (dmem_req) begin
-            mem_we_o   = dmem_we;
-            mem_addr_o = dmem_addr;
-        end
-    end
-    assign imem_gnt = imem_req & ~dmem_req;
-    assign dmem_gnt =             dmem_req;
-
-    // shift register keeping track of the source of mem requests for up to 32 cycles
-    logic        req_sources  [32];
-    logic        req_write    [32]; // keeping track of whether the request was a write
-    logic [31:0] imem_req_addr[32]; // keeping track of address for instruction memory requests
-    logic [4:0]  req_count;
-    always_ff @(posedge clk_i or negedge rst_ni) begin
-        if (~rst_ni) begin
-            req_count <= '0;
-        end else begin
-            if (mem_rvalid_i) begin
-                for (int i = 0; i < 31; i++) begin
-                    req_sources  [i] <= req_sources  [i+1];
-                    req_write    [i] <= req_write    [i+1];
-                    imem_req_addr[i] <= imem_req_addr[i+1];
-                end
-                if (~imem_gnt & ~dmem_gnt) begin
-                    req_count <= req_count - 1;
-                end else begin
-                    req_sources  [req_count-1] <= dmem_gnt;
-                    req_write    [req_count-1] <= dmem_we;
-                    imem_req_addr[req_count-1] <= imem_addr;
-                end
-            end
-            else if (imem_gnt | dmem_gnt) begin
-                req_sources  [req_count] <= dmem_gnt;
-                req_write    [req_count] <= dmem_we;
-                imem_req_addr[req_count] <= imem_addr;
-                req_count                <= req_count + 1;
+    if (DCACHE_SZ != 0) begin
+        always_comb begin
+            mem_req_o   = imem_req | dmem_req;
+            mem_addr_o  = imem_addr;
+            mem_we_o    = 1'b0;
+            mem_be_o    = dmem_be;
+            mem_wdata_o = dmem_wdata;
+            data_read_o = 1'b0;
+            if (dmem_req) begin
+                mem_we_o   = dmem_we;
+                mem_addr_o = dmem_addr;
+                data_read_o = 1'b1;
             end
         end
+        assign imem_gnt = imem_req & ~dmem_req;
+        assign dmem_gnt =             dmem_req;
+
+        logic id_mem_collision  /* verilator public */;
+        assign id_mem_collision = dmem_req && imem_req;
+
+        // shift register keeping track of the source of mem requests for up to 32 cycles
+        logic        req_sources  [32];
+        logic        req_write    [32]; // keeping track of whether the request was a write
+        logic [31:0] imem_req_addr[32]; // keeping track of address for instruction memory requests
+        logic [4:0]  req_count;
+        always_ff @(posedge clk_i or negedge rst_ni) begin
+            if (~rst_ni) begin
+                req_count <= '0;
+            end else begin
+                if (mem_rvalid_i) begin
+                    for (int i = 0; i < 31; i++) begin
+                        req_sources  [i] <= req_sources  [i+1];
+                        req_write    [i] <= req_write    [i+1];
+                        imem_req_addr[i] <= imem_req_addr[i+1];
+                    end
+                    if (~imem_gnt & ~dmem_gnt) begin
+                        req_count <= req_count - 1;
+                    end else begin
+                        req_sources  [req_count-1] <= dmem_gnt;
+                        req_write    [req_count-1] <= dmem_we;
+                        imem_req_addr[req_count-1] <= imem_addr;
+                    end
+                end
+                else if (imem_gnt | dmem_gnt) begin
+                    req_sources  [req_count] <= dmem_gnt;
+                    req_write    [req_count] <= dmem_we;
+                    imem_req_addr[req_count] <= imem_addr;
+                    req_count                <= req_count + 1;
+                end
+            end
+        end
+        assign imem_rvalid = mem_rvalid_i & ~req_sources[0];
+        assign dmem_rvalid = mem_rvalid_i &  req_sources[0] & ~req_write[0];
+        assign dmem_wvalid = mem_rvalid_i &  req_sources[0] &  req_write[0];
+        assign imem_err    = mem_err_i;
+        assign dmem_err    = mem_err_i;
+        assign imem_rdata  = (ICACHE_SZ != 0) ? mem_rdata_i : mem_rdata_i[31:0];
+        assign dmem_rdata  = mem_rdata_i;
+    end else begin
+
+    //if cache is not enabled, no memory arbitration required
+        always_comb begin
+
+            mem_req_o   = dmem_req;
+            mem_be_o    = dmem_be;
+            mem_wdata_o = dmem_wdata;
+            mem_we_o    = dmem_we;
+            mem_addr_o  = dmem_addr;
+                
+        end
+
+        assign dmem_gnt =  dmem_req;
+
+
+        always_comb begin
+            mem_ireq_o   = imem_req;
+            mem_iaddr_o = imem_addr;       
+        end
+
+        assign imem_gnt =  imem_req;
+
+
+        // shift register keeping track of the source of mem requests for up to 32 cycles (needed to keep track of reads/writes)
+        logic        req_sources  [32];
+        logic        req_write    [32]; // keeping track of whether the request was a write
+        logic [4:0]  req_count;
+        always_ff @(posedge clk_i or negedge rst_ni) begin
+            if (~rst_ni) begin
+                req_count <= '0;
+            end else begin
+                if (mem_rvalid_i) begin
+                    for (int i = 0; i < 31; i++) begin
+                        req_sources  [i] <= req_sources  [i+1];
+                        req_write    [i] <= req_write    [i+1];
+                    end
+                    if (~dmem_gnt) begin
+                        req_count <= req_count - 1;
+                    end else begin
+                        req_sources  [req_count-1] <= dmem_gnt;
+                        req_write    [req_count-1] <= dmem_we;
+                    end
+                end
+                else if (dmem_gnt) begin
+                    req_sources  [req_count] <= dmem_gnt;
+                    req_write    [req_count] <= dmem_we;
+                    req_count                <= req_count + 1;
+                end
+            end
+        end
+
+        assign imem_rvalid = mem_irvalid_i;
+
+        assign dmem_rvalid = mem_rvalid_i & ~req_write[0];
+        assign dmem_wvalid = mem_rvalid_i &  req_write[0]; //this could be an issue?
+
+        assign imem_err    = mem_ierr_i;
+        assign dmem_err    = mem_err_i;
+
+        assign imem_rdata  = mem_irdata_i;
+        assign dmem_rdata  = mem_rdata_i;
+
+
     end
-    assign imem_rvalid = mem_rvalid_i & ~req_sources[0];
-    assign dmem_rvalid = mem_rvalid_i &  req_sources[0] & ~req_write[0];
-    assign dmem_wvalid = mem_rvalid_i &  req_sources[0] &  req_write[0];
-    assign imem_err    = mem_err_i;
-    assign dmem_err    = mem_err_i;
-    assign imem_rdata  = (ICACHE_SZ != 0) ? mem_rdata_i : mem_rdata_i[
-        (imem_req_addr[0][$clog2(MEM_W)-1:0] & {3'b000, {($clog2(MEM_W/8)-2){1'b1}}, 2'b00})*8 +: 32];
-    assign dmem_rdata  = mem_rdata_i;
 
 endmodule
